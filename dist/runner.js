@@ -1,3 +1,29 @@
+function zipstageRoutes(p,files,rewrites) {
+  const direct=p ? [p,p.endsWith('/')?p+'index.html':p+'/index.html',p+'.html',p+'.htm'] : ['index.html','index.htm'];
+  for(const c of direct)if(/\.html?$/i.test(c)&&files.has(c))return c;
+  const match=(pattern,path)=>{
+    if(pattern==='**'||pattern==='/**')return true;
+    const a=pattern.replace(/^\//,'').split('/'),b=path.split('/');
+    if(a.length>40||b.length>40)return false;
+    const memo=new Map();
+    function walk(i,j){
+      const key=i+':'+j;if(memo.has(key))return memo.get(key);
+      let yes;
+      if(i===a.length)yes=j===b.length;
+      else if(a[i]==='**')yes=walk(i+1,j)||(j<b.length&&walk(i,j+1));
+      else yes=j<b.length&&(a[i]==='*'||a[i]===b[j])&&walk(i+1,j+1);
+      memo.set(key,yes);return yes;
+    }
+    return walk(0,0);
+  };
+  for(const {source,destination} of rewrites??[]){
+    if(match(source,p)){
+      const path=destination.replace(/^\//,'');
+      if(/\.html?$/i.test(path)&&files.has(path))return path;
+    }
+  }
+  return null;
+}
 function zipstageBootstrap(token, online) {
   const send = (type, value) => parent.postMessage({zipstage:token,type,value}, '*');
   const shorten = (value,max=500) => String(value ?? '').slice(0,max);
@@ -22,9 +48,10 @@ function zipstageBootstrap(token, online) {
     catch(err) {send('fatal',shorten(err?.message||err));}
   });
   send('ready');
-  async function render({items,page,rewrites,storage,hash}) {
-    const files=new Map(items), pageURL=virtual(page);
-    const assets=new Map(), css=new Map(), modules=new Map(), moduleMap=Object.create(null), missing=new Set();
+  async function render({items,page,rewrites,storage,hash,query,request,packages,cdn,transformed}) {
+    const files=new Map(items), pageURL=virtual(page), transpiled=new Set(transformed??[]);
+    const assets=new Map(), css=new Map(), modules=new Map(), moduleMap=Object.create(null), missing=new Set(), blobPaths=new Map();
+    function makeBlob(blob,path){const url=URL.createObjectURL(blob);if(path)blobPaths.set(url,path);return url;}
     let docBase=pageURL;
     const reportMissing = p => {
       if(!p||missing.has(p)||missing.size>=60)return;
@@ -32,20 +59,9 @@ function zipstageBootstrap(token, online) {
     };
     const getResource = (p, sha='') => {
       if(!files.has(p))return null;
-      if(!assets.has(p))assets.set(p,URL.createObjectURL(files.get(p)));
+      if(!assets.has(p))assets.set(p,makeBlob(files.get(p),p));
       return assets.get(p)+sha;
     };
-    const optionsFor = input => [input,input.endsWith('/')?input+'index.html':input+'/index.html',input+'.html'];
-    function lookupPage(p) {
-      for(const c of optionsFor(p))if(/\.html?$/i.test(c)&&files.has(c))return c;
-      for(const {source,destination} of rewrites??[]) {
-        if(source==='**'||source==='/**'||source==='/'+p) {
-          const d=localPath(makeURL(destination,origin));
-          if(d&&/\.html?$/i.test(d)&&files.has(d))return d;
-        }
-      }
-      return null;
-    }
     function resolve(s,b=docBase){return makeURL(s,b);}
     function normalizedResource(raw,base=docBase,shouldLog=true) {
       if(!raw||trimHash(raw))return raw;
@@ -77,16 +93,35 @@ function zipstageBootstrap(token, online) {
       if(!files.has(path)){reportMissing(path);return 'data:text/css,';}
       const next=new Set(trail).add(path);
       const txt=await cssText(await files.get(path).text(),virtual(path),next);
-      const url=URL.createObjectURL(new Blob([txt],{type:'text/css'}));
+      const url=makeBlob(new Blob([txt],{type:'text/css'}),path);
       css.set(path,url);return url;
     }
     const modulePath = p => {
-      for(const x of [p,p+'.js',p+'.mjs',p+'/index.js'])if(files.has(x))return x;
+      for(const x of [p,p+'.js',p+'.mjs',p+'.ts',p+'.tsx',p+'.jsx',p+'.mts',p+'/index.js',p+'/index.ts',p+'/index.tsx',p+'/index.jsx'])if(files.has(x))return x;
       return null;
     };
+    const isCode = p => /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(p);
+    const bare = /^(?:@[a-z\d][a-z\d_.-]*\/)?[a-z\d][a-z\d_.-]*(?:\/[a-z\d_.-]+)*$/i;
+    const env = {MODE:'development',DEV:true,PROD:false,SSR:false,BASE_URL:'/'};
     const looksResolved = s => /^(?:[./]|[a-z][a-z\d+.-]*:)/i.test(s);
     function specifier(s,b) {
-      if(!looksResolved(s))return s;
+      if(typeof s!=='string')return s;
+      if(s.startsWith('@/')||s.startsWith('~/')){
+        const aliased='src/'+s.slice(2);
+        if(modulePath(aliased))return virtual(modulePath(aliased));
+      }
+      if(!looksResolved(s)){
+        if(cdn&&bare.test(s)){
+          const bits=s.split('/'), count=s.startsWith('@')?2:1, pkg=bits.slice(0,count).join('/'), rest=bits.slice(count).join('/');
+          const pin=Object.prototype.hasOwnProperty.call(packages??{},pkg)?String(packages[pkg]).replace(/^[~^]/,''):'';
+          if(Object.prototype.hasOwnProperty.call(packages??{},pkg)){
+            const target='https://esm.sh/'+pkg+(/^\d+\.\d+\.\d+(?:-[a-z\d.-]+)?$/i.test(pin)?'@'+pin:'')+(rest?'/'+rest:'');
+            moduleMap[s]=target;
+            return target;
+          }
+        }
+        return s;
+      }
       const u=resolve(s,b), p=localPath(u);
       if(p===null)return u?.href??s;
       if(!modulePath(p))reportMissing(p);
@@ -98,10 +133,11 @@ function zipstageBootstrap(token, online) {
       const changes=[];
       for(const it of imports){
         if(it.t===3){
-          const m=/^\s*\.\s*url\b/.exec(code.slice(it.e));
-          if(m)changes.push([it.s,it.e+m[0].length,safeJSON(base)]);
+          const m=/^\s*\.\s*(url|env)\b/.exec(code.slice(it.e));
+          if(m)changes.push([it.s,it.e+m[0].length,m[1]==='url'?safeJSON(base):'('+safeJSON(env)+')']);
         }else if(it.n!==undefined){
-          const next=specifier(it.n,base);
+          let next=specifier(it.n,base);
+          if(it.a<0&&next.startsWith(origin+'/')&&/\.json$/i.test(next)&&!it.n.startsWith('http'))next+='?import-json';
           if(next===it.n)continue;
           changes.push([it.s,it.e,it.d>=0?safeJSON(next):safeJSON(next).slice(1,-1).replace(/'/g,'\\x27')]);
         }else if(it.t===2){
@@ -120,8 +156,30 @@ function zipstageBootstrap(token, online) {
       if(modules.has(path))return modules.get(path);
       if(!files.has(path)){reportMissing(path);return 'data:text/javascript,';}
       let url;
-      if(!/\.[cm]?js$/i.test(path)){url=getResource(path);}
-      else{const src=rewriteJS(await files.get(path).text(),virtual(path));url=URL.createObjectURL(new Blob([src],{type:'text/javascript'}));}
+      if(/\.css$/i.test(path)){
+        const href=await cssFile(path);
+        const styles=Object.create(null);
+        if(path.endsWith('.module.css')){
+          const text=await files.get(path).text();
+          for(const rule of text.matchAll(/([^{}]+)\{/g))for(const match of rule[1].matchAll(/\.([a-z_][\w-]*)/gi))styles[match[1]]=match[1];
+        }
+        url=makeBlob(new Blob(['const x=document.createElement("link");x.rel="stylesheet";x.href='+safeJSON(href)+';document.head.append(x);export default '+safeJSON(styles)+';'],{type:'text/javascript'}),path);
+      }else if(/\.json$/i.test(path)){
+        // A direct Vite JSON import and native JSON import attributes each get their expected MIME.
+        url=getResource(path);
+        let payload;
+        try{payload='export default JSON.parse('+safeJSON(await files.get(path).text())+');';}
+        catch{payload='throw Error("JSON を読み込めませんでした");';}
+        moduleMap[virtual(path)+'?import-json']=makeBlob(new Blob([payload],{type:'text/javascript'}),path);
+      }else if(!isCode(path)){
+        const href=getResource(path);
+        url=makeBlob(new Blob(['export default '+safeJSON(href)+';'],{type:'text/javascript'}),path);
+      }else if(/\.(?:[cm]?ts|[jt]sx)$/i.test(path)&&!transpiled.has(path)){
+        reportMissing(path+'（変換できませんでした）');url='data:text/javascript,';
+      }else{
+        const src=rewriteJS(await files.get(path).text(),virtual(path));
+        url=makeBlob(new Blob([src],{type:'text/javascript'}),path);
+      }
       modules.set(path,url);moduleMap[virtual(path)]=url;
       return url;
     }
@@ -152,8 +210,7 @@ function zipstageBootstrap(token, online) {
     }
     const hasModules=parsed.querySelector('script[type="module"]') || [...parsed.querySelectorAll('script:not([src])')].some(e=>/\bimport\s*\(/.test(e.textContent));
     if(hasModules){
-      for(const p of files.keys())if(/\.[cm]?js$/i.test(p))await makeModule(p);
-      for(const p of files.keys())if(/\.css$/i.test(p))await cssFile(p);
+      for(const p of files.keys())if(isCode(p)||/\.(?:css|json|svg|png|jpe?g|webp|gif|avif|woff2?|ttf|ico|mp3|wav)$/i.test(p))await makeModule(p);
     }
     for(const el of parsed.querySelectorAll('[src],[href],[poster],[srcset],[data-src], style,[style]')){
       if(el.closest('template'))continue;
@@ -169,10 +226,12 @@ function zipstageBootstrap(token, online) {
       if(tag==='script'&&get('src')){
         const raw=get('src'), u=resolve(raw), p=localPath(u), isModule=el.type.toLowerCase()==='module';
         if(p!==null){
-          if(/\.(?:tsx?|jsx)$/i.test(p)){el.remove();send('log',{level:'error',message:'ビルド前のソースです。公開用のフォルダ（distなど）をZIPにしてください。'});continue;}
           const local=modulePath(p)??p;
-          if(isModule)put('src',await makeModule(local));
-          else if(hasModules && /\.[cm]?js$/i.test(local) && files.has(local))put('src',await makeModule(local));
+          if(isModule||transpiled.has(local)){
+            if(transpiled.has(local))el.type='module';
+            put('src',await makeModule(local));
+          }
+          else if(hasModules && isCode(local) && files.has(local))put('src',await makeModule(local));
           else put('src',normalizedResource(raw));
           el.removeAttribute('integrity');
         }else if(u&&/^https?:$/.test(u.protocol))put('src',u.href);
@@ -204,13 +263,14 @@ function zipstageBootstrap(token, online) {
       const navigate=(raw)=>{
         const u=resolve(raw),p=localPath(u);
         if(p===null){send('log',{level:'warn',message:'外部ページへの移動はプレビュー内では行いません。'});return;}
-        const next=lookupPage(p);
-        if(next)send('navigate',{page:next,hash:u.hash??''});
+        const next=zipstageRoutes(p,files,rewrites);
+        if(next)send('navigate',{page:next,hash:u.hash??'',query:u.search??'',request:p});
         else reportMissing(p);
       };
       document.addEventListener('click',e=>{
         const link=e.target?.closest?.('a[href],area[href]');
         if(!link||e.defaultPrevented)return;
+        if(e.button!==0)return;
         const raw=link.getAttribute('href');
         if(trimHash(raw))return;
         if(!raw||/^javascript:/i.test(raw))return;
@@ -218,7 +278,7 @@ function zipstageBootstrap(token, online) {
       });
       addEventListener('DOMContentLoaded',()=>{
         if(hash){try{history.replaceState(null,'',hash);}catch{}let id=hash.slice(1);try{id=decodeURIComponent(id);}catch{}document.getElementById(id)?.scrollIntoView();}
-        send('rendered',shorten(document.title,100));
+        send('rendered',{title:shorten(document.title,100),viewport:[innerWidth,innerHeight]});
       },{once:true});
       const onError=(e)=>{
         if(e instanceof ErrorEvent)send('log',{level:'error',message:shorten(e.message||'JavaScriptエラー')});
@@ -278,6 +338,7 @@ function zipstageBootstrap(token, online) {
           if(d?.set&&d.configurable)Object.defineProperty(ctor.prototype,attr,{...d,set(value){d.set.call(this,runtimeValue(this,attr,value));}});
         }
       }
+      if(typeof zipstageDev==='function')zipstageDev(send,token,{resolve,localPath,blobPaths,online,route:'/'+(request||page)+(query||'')+(hash||'')});
       const NativeAudio=window.Audio;
       if(NativeAudio) window.Audio=new Proxy(NativeAudio,{construct(Target,args){
         const audio=new Target();if(args.length)audio.src=args[0];return audio;

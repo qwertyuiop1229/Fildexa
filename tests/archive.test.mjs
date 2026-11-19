@@ -42,3 +42,57 @@ test('Finds both an Astro-Fray-like public directory and a direct zipped publica
     assert.equal(res.candidates[0].root,expected);
   }
 });
+
+import vm from 'node:vm';
+import {normalizeEntries,projectKey,SavedProjects,safeStorage,fitViewport,describePage} from '../dist/workspace.mjs';
+
+test('Returns from nested sample page to the root and preserves rewrite paths',async()=>{
+  const runner=await readFile(new URL('../dist/runner.js',import.meta.url),'utf8');
+  const route=vm.runInNewContext(runner+'\nzipstageRoutes');
+  const files=new Map([['index.html',''],['details/index.html',''],['topics/article.htm','']]);
+  assert.equal(route('',files,[]),'index.html');
+  assert.equal(route('details',files,[]),'details/index.html');
+  assert.equal(route('details/',files,[]),'details/index.html');
+  assert.equal(route('topics/article',files,[]),'topics/article.htm');
+  assert.equal(route('topics/some/thing',files,[{source:'/topics/**',destination:'/topics/article.htm'}]),'topics/article.htm');
+  assert.equal(route('other',files,[]),null);
+  assert.equal(describePage({page:'index.html',request:'',query:'?a=1',hash:'#about'}),'/?a=1#about');
+});
+test('Selects a local source folder without treating it as a ZIP',async()=>{
+  const base=new URL('./fixtures/ViteQA/',import.meta.url);
+  const paths=['index.html','package.json','src/main.ts','src/message.ts','src/data.json','src/style.css'];
+  const rows=await Promise.all(paths.map(async path=>({path:'ViteQA/'+path,file:new Blob([await readFile(new URL(path,base))])})));
+  const archive=normalizeEntries(rows);
+  const found=await scan(archive);
+  assert.equal(found.build,true);
+  assert.equal(found.candidates[0].home,'index.html');
+  assert.match(await (await archive.blob('ViteQA/src/main.ts')).text(),/interface Status/);
+});
+test('Fits custom viewports without overflowing the stage',()=>{
+  assert.deepEqual(fitViewport(768,1024,400,512),{ratio:.5,w:384,h:512});
+  assert.deepEqual(fitViewport(390,844,900,844),{ratio:1,w:390,h:844});
+});
+test('Stores project data independently and deletes only the selected record',()=>{
+  const data=new Map();
+  const storage=new SavedProjects({get length(){return data.size},key:i=>[...data.keys()][i],setItem:(k,v)=>data.set(k,v),getItem:k=>data.get(k),removeItem:k=>data.delete(k)});
+  const a=projectKey('Covo-master.zip','Covo-master/public/','Covo-master/','Firebase Hosting');
+  const b=projectKey('Astro-Fray','Astro-Fray/public/','Astro-Fray/','公開フォルダ');
+  assert.notEqual(a,b);
+  storage.write(a,{enabled:true,local:{score:'4'}});storage.write(b,{enabled:true,local:{score:'1'}});
+  assert.equal(storage.load(a).local.score,'4');
+  assert.equal(storage.list().length,2);
+  storage.erase(b);
+  assert.equal(storage.load(a).local.score,'4');
+  assert.equal(storage.load(b),null);
+  assert.deepEqual(safeStorage([['x','1'],['bad',3],[{},'bad']]),{x:'1'});
+});
+
+test('Distinguishes unrelated projects with the same generic folder name', async()=>{
+  const {appSignature}=await import('../dist/workspace.mjs');
+  const signature=markup=>appSignature([['index.html',new Blob([markup])]],'index.html');
+  const a=await signature('<title>Covo</title><script src="/assets/main-AbCdEf98.js"></script>');
+  const aUpdate=await signature('<title>Covo</title><script src="/assets/main-AbCdEf00.js"></script>');
+  const b=await signature('<title>Astro Fray</title><script src="/assets/main-AbCdEf98.js"></script>');
+  assert.equal(a,aUpdate);assert.notEqual(a,b);
+  assert.notEqual(projectKey('public','public/','public/','公開フォルダ',a),projectKey('public','public/','public/','公開フォルダ',b));
+});

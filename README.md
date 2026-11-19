@@ -1,12 +1,12 @@
 # ZipStage
 
-日本語の、ブラウザ内で動く ZIP Web プレビュー。ZIP はサーバーへ送らず、sandbox 付き iframe でプレビューする。デモの ZIP はテスト用のオリジナル素材。
+ZIP・ローカルフォルダ・単体HTMLをブラウザでプレビューする。ブラウザ内で展開・コンパイルして、オリジンを隔離した iframe で実行する。アプリファイルはサーバーにアップロードしない。
 
-- サイトのコピーを配信するには dist ディレクトリを静的ホストで提供する。
-- テストは node --test tests/archive.test.mjs。
-- 対応入力は ZIP または単体 HTML。ZIP は 120 MiB まで、解凍後 300 MiB まで、1 ファイル 96 MiB まで。暗号化、分割 ZIP、ZIP64 は非対応。
-- ZIP のルート、1 階層のラッパー、firebase.json の hosting.public、代表的な dist / public などを判別。Hosting リライトは、実ファイルに向かう単純な完全一致ルールまたは catch-all を補助。
-- HTML、CSS、画像、古典的な JavaScript、一般的な JS モジュール、ZIP への相対またはルート相対の fetch/XHR に対応。ブラウザ側のストレージ互換層は開いているプロジェクトだけのメモリ内で動作。
-- Firebase の POPUP / リダイレクト認証、PWA のインストール、IndexedDB、実オリジンに依存する API、バックエンドやビルドコマンドはプレビューで提供しない。一般的なファイル読み込みと、実ホストを同じにすることは別。
-- 外部の画像や API へのアクセスは初期状態では CSP で制限。外部通信をオンにすると外部 API へのアクセスを試みるため、内容を把握している自分の ZIP を開くこと。
-- dist/vendor の es-module-lexer のライセンスを同梱。
+- 配信には dist ディレクトリを使用。Node 24で node --test tests/archive.test.mjs を実行できる。
+- ZIPは120 MiB、展開後300 MiB、1ファイル96 MiBまで。暗号化、分割ZIP、ZIP64は非対応。フォルダの選択には webkitdirectory、ドロップ時は利用できる場合にディレクトリエントリーAPIを使用。
+- ZIPのルート、ラッパー、firebase.json の hosting.public、代表的な dist / public を判別。ファイルが存在するHTMLパスとシンプルな Firebase Hosting のリライトルールに対応。
+- TypeScript、TSX、JSXはesbuild WASMでブラウザ内変換。ローカルモジュール、基本的なViteの静的ファイル・CSS・JSON・import.meta.envの定数を解決する。Viteサーバー、任意のプラグイン、HMR、プリプロセッサ、SSR、完全なnpmビルドは実行しない。必要時はローカルでビルドして成果物を開く。
+- ソースでpackage.jsonの依存を使う場合、外部通信に加えてnpm CDNを明示的に有効にできる。プレビューのオリジン・CORS・CDN・各ライブラリの仕様は通常ブラウザと同様に適用される。
+- 外部リソースとAPI通信は初期状態でCSPにより制限。ユーザーが許可した場合にHTTPSとWSSを使える。開発ツールはコンソール、DOM検索・表示、観測可能な通信、ソース閲覧、基本性能、localStorage・sessionStorageの表示を備える。接続に使われたIPやTLS情報、非公開ヘッダー、ブラウザ内部のデバッグ機能は取得できない。DNS候補は利用者が要求したときにCloudflareへドメイン名だけ問い合わせる。
+- アプリのlocalStorageを、利用者が許可したプロジェクトだけ継続保存する。保存レコードは名前・公開フォルダ・HTMLの手がかりから区別し、設定から個別に削除できる。sessionStorageはプレビュー作業中のみ。Firebase認証のポップアップ／リダイレクト、PWAのインストール、IndexedDB、バックエンド処理はこのプレビューの対象外。
+- dist/vendorに es-module-lexer と esbuild のライセンスを同梱。
