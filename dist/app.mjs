@@ -4,10 +4,11 @@ import {normalizeEntries,listDrop,projectKey,SavedProjects,safeStorage,compile,p
 import {createPicker} from './picker.mjs';
 import {toolDock} from './tool-dock.mjs';
 import {cancelMotion,rectOf,playFlip,enterContent,flashIcon,cornerToggle} from './motion.mjs';
-import {previewPolicy} from './policy.mjs';
+import {previewPolicy,previewSandbox} from './policy.mjs';
+import {createLayout} from './layout.mjs';
 
 const $=id=>document.getElementById(id);
-const state={job:0,gen:0,archive:null,projects:[],project:null,items:null,original:null,frame:null,session:null,online:false,cdn:false,view:'desktop',focus:'',open:false,storage:{},packages:{},transformed:[],sourceRoot:'',history:[],index:-1,custom:[900,640],persist:false};
+const state={job:0,gen:0,archive:null,projects:[],project:null,items:null,original:null,frame:null,session:null,online:false,cdn:false,game:false,view:'desktop',focus:'',open:false,storage:{},packages:{},transformed:[],sourceRoot:'',history:[],index:-1,custom:[900,640],persist:false};
 let saved;
 try{saved=new SavedProjects(localStorage);}catch{}
 const bridge=(action,value)=>{
@@ -16,7 +17,8 @@ const bridge=(action,value)=>{
   frame.contentWindow.postMessage({zipstage:session.token,type:'dev',value:{action,value}},'*');return true;
 };
 const sourceFiles=()=>state.original??[];
-const dock=toolDock($,bridge,{files:sourceFiles,storage:()=>state.storage,openStorage,reflow:resizeStage,metadata:()=>({online:state.online,phase:state.frame?'プレビュー中':'未起動',compiler:state.transformed.length,duration:state.startMs})});
+let layout;
+const dock=toolDock($,bridge,{files:sourceFiles,storage:()=>state.storage,openStorage,reflow:resizeStage,panel:value=>layout?.panel(value),mountSplit:host=>layout?.mount(host),metadata:()=>({online:state.online,phase:state.frame?'プレビュー中':'未起動',compiler:state.transformed.length,duration:state.startMs})});
 const pickers={
   root:createPicker($('root-picker'),'root-label',i=>selectProject(Number(i))),
   page:createPicker($('page-picker'),'page-label',page=>navigate({page}))
@@ -50,7 +52,7 @@ function empty(title,body){
 function failure(e,context='ファイルを開けませんでした'){
   const summary=String(e?.message??e??'読み込みに失敗しました。');
   dispose();loading(false);phase(context,'error');message(summary,'error');dock.log({level:'error',message:summary});
-  empty(context,summary);$('focus-preview').disabled=true;
+  empty(context,summary);$('focus-preview').disabled=true;$('close-project').disabled=false;
 }
 function switchSidebar(open){
   $('sidebar').classList.toggle('open',open);$('open-sidebar').setAttribute('aria-expanded',String(open));
@@ -60,7 +62,25 @@ function resetSettings(){
   state.online=false;state.cdn=false;$('online').checked=false;$('npm').checked=false;$('npm-option').hidden=true;networkNote();
 }
 function networkNote(){
-  $('online-description').textContent=state.online?'オン · 外部APIに接続できます。':'オフ · 外部リソースとAPI通信を制限します。';
+  $('online-description').textContent=state.online?'オン · 外部APIに接続を試みます。CORS・ログインの制限は残ります。':'オフ · 外部リソースとAPI通信を制限します。';
+}
+function resetGame(){
+  state.game=false;$('pointer-lock').checked=false;$('pointer-lock').disabled=true;
+}
+function resetProject(){
+  state.job++;state.gen++;dispose();
+  Object.assign(state,{archive:null,projects:[],project:null,items:null,original:null,packages:{},history:[],index:-1,name:'',size:0,transformed:[],compileErrors:[],build:false,sourceRoot:'',key:null,startMs:null});
+  resetSettings();resetGame();savedView();dock.close();dock.reset();
+  setFocus('');setView('desktop');custom(900,640);switchSidebar(false);
+  $('file').value='';$('folder').value='';
+  $('project-info').hidden=true;$('selection').hidden=true;
+  $('project-name').textContent='';$('project-name').removeAttribute('title');$('project-detail').textContent='';
+  pickers.root.set([],'');pickers.page.set([],'');
+  for(const id of ['reload','back','forward','close-project','focus-preview'])$(id).disabled=true;
+  $('path-label').textContent='ファイルを開いて開始';$('path-label').removeAttribute('title');
+  $('view-label').removeAttribute('title');message();phase();loading(false);
+  empty('ZIPで開く、Webアプリ。','HTML・CSS・JavaScript・画像を、フォルダ構成のままプレビュー。');
+  $('project-announcement').textContent='プレビューを閉じました。保存済みデータは保持されています。';
 }
 function urlState(item){return {...item,hash:item.hash||'',query:item.query||'',request:item.request??item.page};}
 function updateRoute(){
@@ -107,7 +127,8 @@ function selectProject(index){
   updateRoute();void prepare();
 }
 async function inspect(input,title,flavor){
-  const job=++state.job;state.gen++;dispose();dock.reset();resetSettings();switchSidebar(false);
+  const job=++state.job;state.gen++;dispose();dock.reset();resetSettings();resetGame();switchSidebar(false);
+  $('close-project').disabled=false;$('project-announcement').textContent='';
   message();phase('解析中');empty('プロジェクトを確認中','HTMLと公開用フォルダを探しています。');loading(true,'ファイル構成を解析中');
   state.name=title;state.items=null;state.original=null;state.key=null;state.startMs=null;state.project=null;state.packages={};savedView();
   $('project-info').hidden=true;$('selection').hidden=true;$('back').disabled=true;$('forward').disabled=true;$('reload').disabled=true;$('focus-preview').disabled=true;
@@ -163,7 +184,7 @@ async function prepare(){
     savedView();
     const result=await compile(items,(i,n)=>{if(gen===state.gen){phase('変換中');loading(true,'TypeScript・JSX を変換中  '+i+' / '+n,Math.round(i/n*100));}},()=>gen!==state.gen);
     if(!result||gen!==state.gen)return;
-    state.items=result.items;state.compileErrors=result.errors;
+    state.items=result.items;state.compileErrors=result.errors;$('pointer-lock').disabled=false;
     const originals=new Map(items);
     state.transformed=result.items.filter(([p,file])=>file!==originals.get(p)).map(([p])=>p);
     if(result.errors.length)message(result.errors.length+'件のソースを変換できませんでした。コンソールで確認できます。');
@@ -180,7 +201,7 @@ async function start({keep=false}={}){
   phase('起動中');empty('プレビューを起動中','アプリのファイルをブラウザで配置しています。');loading(true,'プレビューの準備');
   try{
     const raw=await runnerCode();if(gen!==state.gen)return;
-    const frame=document.createElement('iframe');frame.title='Webアプリのプレビュー';frame.setAttribute('sandbox','allow-scripts');frame.referrerPolicy='no-referrer';
+    const frame=document.createElement('iframe');frame.title='Webアプリのプレビュー';frame.setAttribute('sandbox',previewSandbox(state.game));frame.referrerPolicy='no-referrer';
     const csp=previewPolicy(online);
     frame.srcdoc='<!doctype html><meta charset="UTF-8"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="'+csp+'"><script>'+raw+'\nzipstageBootstrap('+JSON.stringify(token)+','+online+','+JSON.stringify(csp)+');<\/script>';
     state.frame=frame;state.session={token,gen,ready:false,done:false,watch:setTimeout(()=>{
@@ -243,7 +264,7 @@ window.addEventListener('drop',async e=>{
   }catch(e){if(job===state.job)failure(e);}
 });
 $('demo').onclick=async()=>{
-  const job=state.job;$('demo').disabled=true;$('help-dialog').close();
+  const job=state.job;$('demo').disabled=true;$('close-project').disabled=false;$('help-dialog').close();
   try{
     const r=await fetch('./sample.zip');if(!r.ok)throw Error('サンプルを開けませんでした。');
     const b=await r.blob();if(job===state.job)void inspect(b,'ZipStage-sample.zip','zip');
@@ -251,6 +272,8 @@ $('demo').onclick=async()=>{
   finally{$('demo').disabled=false;}
 };
 $('back').onclick=()=>go(-1);$('forward').onclick=()=>go(1);$('reload').onclick=()=>void start();
+$('close-project').onclick=resetProject;
+$('pointer-lock').onchange=()=>{state.game=$('pointer-lock').checked;if(state.items)void start();};
 $('open-sidebar').onclick=$('empty-open').onclick=()=>switchSidebar(true);
 $('close-sidebar').onclick=()=>switchSidebar(false);
 document.addEventListener('pointerdown',e=>{
@@ -398,3 +421,4 @@ $('erase-dialog').onclose=()=>{
   erase=null;refreshSaved();dock.storage();
 };
 networkNote();setView('desktop');$('focus-preview').disabled=true;
+layout=createLayout($,dock,resizeStage,measure,()=>{cancelMotion(frameShell);cancelMotion(viewPanel);});

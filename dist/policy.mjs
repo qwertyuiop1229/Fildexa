@@ -18,3 +18,7 @@ export function previewPolicy(online=false) {
     "manifest-src blob: data:"
   ].join('; ')+';';
 }
+
+export function previewSandbox(game=false) {
+  return 'allow-scripts'+(game?' allow-pointer-lock':'');
+}

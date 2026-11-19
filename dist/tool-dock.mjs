@@ -59,19 +59,20 @@ export function toolDock($,bridge,ctx){
     for(const b of buttons){const same=b.dataset.key===key;b.tabIndex=same?0:-1;b.setAttribute('aria-selected',String(same));}
     clearTimeout(closingTimer);drawer.classList.remove('is-closing');
     if(!wasOpen||changed)ctx.reflow(()=>{
-      drawer.classList.add('is-open');mount();
+      drawer.classList.add('is-open');ctx.panel(true);mount();
     });
     if(wasOpen&&changed)enterContent(host,{duration:135,y:0});
   }
   function close(){
     if(picking){picking=false;bridge('pick',false);}
     isOpen=false;levelPicker?.close();host.inert=true;host.setAttribute('aria-hidden','true');toggle.setAttribute('aria-expanded','false');
-    ctx.reflow(()=>{drawer.classList.remove('is-open');drawer.classList.add('is-closing');});
+    const wasRight=$('preview').dataset.dock==='right';
+    ctx.reflow(()=>{ctx.mountSplit(null);drawer.classList.remove('is-open');ctx.panel(false);if(!wasRight)drawer.classList.add('is-closing');});
     clearTimeout(closingTimer);closingTimer=setTimeout(()=>drawer.classList.remove('is-closing'),175);
     view={};panelVersion++;
   }
   function mount(){
-    panelVersion++;levelPicker?.destroy();levelPicker=null;host.replaceChildren();view={};
+    panelVersion++;ctx.mountSplit(null);levelPicker?.destroy();levelPicker=null;host.replaceChildren();view={};
     if(tab==='console'){
       const filter=create('div');filter.id='log-picker';
       const levelLabel=create('span','ログレベル','sr-only');levelLabel.id='log-level-label';filter.append(levelLabel);
@@ -91,15 +92,15 @@ export function toolDock($,bridge,ctx){
       const field=search(tab,'CSSセレクター・テキストで検索',v=>bridge('elements',v));
       view.pick=action('画面で選ぶ',()=>{const next=!picking;if(doBridge('pick',next)){picking=next;syncPick();}});syncPick();
       controls(field,view.pick,action('更新',()=>doBridge('elements',filters.elements)));
-      const wrap=body('dual-pane');view.list=create('div',undefined,'inspector-list');view.details=create('div');wrap.append(view.list,view.details);
+      const wrap=body('dual-pane');view.list=create('div',undefined,'inspector-list');view.details=create('div');wrap.append(view.list,view.details);ctx.mountSplit(wrap);
       bridge('elements',filters.elements);renderElements();
     }else if(tab==='network'){
       controls(search(tab,'URL・ドメイン・種類を検索'),action('消去',()=>{net.clear();selectedNet='';netMessage='';update();}),action('コピー',()=>copy(textJSON([...net.values()]))));
-      const wrap=body('dual-pane');view.list=create('div');view.details=create('div');view.details.id='net-info';wrap.append(view.list,view.details);
+      const wrap=body('dual-pane');view.list=create('div');view.details=create('div');view.details.id='net-info';wrap.append(view.list,view.details);ctx.mountSplit(wrap);
       renderNet();
     }else if(tab==='sources'){
       controls(search(tab,'ファイルを検索',()=>renderFiles()),action('コピー',()=>{if(view.sourceText)copy(view.sourceText);}));
-      const wrap=body('dual-pane');view.list=create('div',undefined,'inspector-list');view.details=create('div');wrap.append(view.list,view.details);
+      const wrap=body('dual-pane');view.list=create('div',undefined,'inspector-list');view.details=create('div');wrap.append(view.list,view.details);ctx.mountSplit(wrap);
       renderFiles();if(selectedFile)showFile(selectedFile);
     }else if(tab==='performance'){
       controls(action('計測値を更新',()=>doBridge('metrics')),help('ブラウザから取得できる実行中の指標'));
@@ -297,7 +298,7 @@ export function toolDock($,bridge,ctx){
       if(next!==undefined){e.preventDefault();buttons[next].focus();open(buttons[next].dataset.key);}
     };
   }
-  return {log,receive,invalidate,reset,open,ready,keepAfterReload:()=>keepAfterReload,storage:()=>{if(tab==='application')update();}};
+  return {log,receive,invalidate,reset,open,close:()=>{if(isOpen)close();},show:()=>open(),ready,keepAfterReload:()=>keepAfterReload,storage:()=>{if(tab==='application')update();}};
 }
 async function dns(host){
   if(!/^(?:[a-z\d-]+\.)*[a-z\d-]+$/i.test(host)&&!host.includes(':'))return [];

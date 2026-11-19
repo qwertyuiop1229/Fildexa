@@ -339,6 +339,15 @@ function zipstageBootstrap(token, online, policy) {
       for(const kind of ['localStorage','sessionStorage']){
         try{Object.defineProperty(window,kind,{configurable:true,value:storageFor(kind)});}catch{}
       }
+      const NativeRequest=window.Request;
+      if(NativeRequest)window.Request=new Proxy(NativeRequest,{construct(Target,[input,...rest],newTarget){
+        // Native Request normally resolves against about:srcdoc's host URL.
+        if(typeof input==='string'&&!/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(input)){
+          const candidate=resolve(input);
+          if(localPath(candidate)!==null)input=candidate.href;
+        }
+        return Reflect.construct(Target,[input,...rest],newTarget);
+      }});
       window.fetch=function(input,options){
         let raw;
         try{raw=typeof input==='string'?input:input instanceof URL?input.href:input?.url;}catch{}

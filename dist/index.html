@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./studio.css">
   <link rel="stylesheet" href="./motion.css">
+  <link rel="stylesheet" href="./layout.css">
   <script type="module" src="./app.mjs"></script>
 </head>
 <body>
@@ -22,6 +23,8 @@
     <symbol id="i-reload" viewBox="0 0 24 24"><path d="M19 11a7 7 0 1 0-2 6m2-11v5h-5"/></symbol>
     <symbol id="i-max" viewBox="0 0 24 24"><path d="M9 4H4v5m11-5h5v5m0 6v5h-5m-11-5v5h5"/></symbol>
     <symbol id="i-min" viewBox="0 0 24 24"><path d="M4 9h5V4m11 5h-5V4M4 15h5v5m11-5h-5v5"/></symbol>
+    <symbol id="i-dock-right" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M14 5v14"/></symbol>
+    <symbol id="i-dock-bottom" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 13h16"/></symbol>
     <symbol id="i-code" viewBox="0 0 24 24"><path d="m9 6-6 6 6 6m6-12 6 6-6 6"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 11v5m0-8v.2"/></symbol>
@@ -51,6 +54,7 @@
       <button class="btn help-button" id="open-help" type="button"><svg><use href="#i-help"/></svg>使い方</button>
     </div>
   </div></header>
+  <p id="project-announcement" class="sr-only" role="status"></p>
   <main class="studio">
     <aside class="sidebar" id="sidebar" aria-label="プロジェクト設定">
       <div class="sidebar-head"><span><svg><use href="#i-layer"/></svg> ワークスペース</span><button class="icon-btn chrome-btn compact-close" id="close-sidebar" type="button" aria-label="プロジェクト設定を閉じる"><svg><use href="#i-close"/></svg></button></div>
@@ -74,6 +78,8 @@
         <div class="switch-row"><label for="online">外部通信</label><input type="checkbox" id="online" role="switch" aria-describedby="online-description"></div>
         <p class="quiet" id="online-description">初期状態ではオフ。</p>
         <div class="switch-row" id="npm-option" hidden><label for="npm">npm依存をCDNから</label><input type="checkbox" id="npm" role="switch"></div>
+        <div class="switch-row"><label for="pointer-lock">ゲーム操作</label><input type="checkbox" id="pointer-lock" role="switch" aria-describedby="pointer-description" disabled></div>
+        <p class="quiet" id="pointer-description">対応ブラウザでマウスを捕捉できます。解除は Esc。切り替えると再読み込みします。</p>
         <div class="switch-row"><label for="persist">アプリのデータを保存</label><input type="checkbox" id="persist" role="switch" disabled></div>
         <p class="quiet">localStorageのみ。アプリごとに分離。</p>
         <button class="btn storage-button" id="open-storage" type="button"><svg><use href="#i-layer"/></svg>保存データを管理</button>
@@ -81,7 +87,9 @@
       <p class="side-foot"><svg><use href="#i-lock"/></svg> 選んだファイルはアップロードされません。</p>
     </aside>
 
+    <div id="sidebar-split" class="splitter sidebar-split" role="separator" tabindex="0" aria-orientation="vertical" aria-label="プロジェクト設定の幅を調整" aria-controls="sidebar" title="ドラッグで設定の幅を調整"></div>
     <section class="preview card" id="preview" aria-label="プレビュー">
+      <div class="stage-pane">
       <header class="preview-head">
         <div class="preview-heading">
           <button class="icon-btn chrome-btn compact-menu" id="open-sidebar" type="button" aria-label="プロジェクトを開く" aria-controls="sidebar" aria-expanded="false"><svg><use href="#i-folder"/></svg></button>
@@ -101,6 +109,7 @@
           <button class="icon-btn" type="button" id="back" aria-label="戻る" title="戻る" disabled><svg><use href="#i-back"/></svg></button>
           <button class="icon-btn" type="button" id="forward" aria-label="進む" title="進む" disabled><svg><use href="#i-next"/></svg></button>
           <button class="icon-btn" type="button" id="reload" title="再読み込み" aria-label="再読み込み" disabled><svg><use href="#i-reload"/></svg></button>
+          <button class="icon-btn close-project" type="button" id="close-project" title="プレビューを閉じる" aria-label="プレビューを閉じる" disabled><svg><use href="#i-close"/></svg></button>
         </div>
         <div class="address"><svg><use href="#i-lock"/></svg><span id="path-label">ファイルを開いて開始</span></div>
         <span class="screen-label" id="view-label">PC</span>
@@ -122,7 +131,9 @@
         <div id="frame-shell" class="frame-shell" hidden><div id="frame-wrap" class="frame-wrap"></div><button class="resize-handle" id="resize-handle" type="button" aria-label="ビューポートのサイズ調整" title="ドラッグでサイズ変更" hidden><svg><use href="#i-drag"/></svg></button></div>
       </div>
       <button type="button" class="focus-exit" id="exit-focus" aria-label="右上の縮小ボタンを表示" hidden><span><svg><use href="#i-min"/></svg></span></button>
+      </div>
       <section class="tools" id="tools" aria-label="開発ツール">
+        <div id="tool-split" class="splitter tool-split" role="separator" tabindex="0" aria-orientation="horizontal" aria-label="開発ツールの高さを調整" aria-controls="tool-content" title="ドラッグで開発ツールの大きさを調整" hidden></div>
         <div class="tool-head">
           <button class="btn dock-toggle" id="tool-toggle" aria-expanded="false" aria-controls="tool-content"><svg><use href="#i-terminal"/></svg><span>開発ツール</span><span class="log-count" id="log-count">0</span></button>
           <div class="tool-tabs" id="tool-tabs" role="tablist" aria-label="開発ツールのパネル">
@@ -133,6 +144,7 @@
             <button type="button" role="tab" aria-selected="false" id="tab-performance" aria-controls="tool-content" data-key="performance">性能</button>
             <button type="button" role="tab" aria-selected="false" id="tab-application" aria-controls="tool-content" data-key="application">ストレージ</button>
           </div>
+          <button class="icon-btn chrome-btn" type="button" id="dock-position" title="開発ツールを右に配置" aria-label="開発ツールを右に配置" aria-pressed="false"><svg><use id="dock-icon" href="#i-dock-right"/></svg></button>
           <button class="icon-btn chrome-btn" type="button" id="focus-preview" title="プレビュー画面だけ拡大" aria-label="プレビュー画面だけ拡大" hidden><svg><use href="#i-max"/></svg></button>
         </div>
         <div class="tool-drawer" id="tool-drawer"><div id="tool-content" role="tabpanel" aria-labelledby="tab-console" class="tool-content" aria-hidden="true" inert></div></div>
@@ -145,15 +157,16 @@
       <ol class="instructions">
         <li><strong>ZIP・フォルダ・HTMLを開く</strong><p>CSSや画像も使うときは、まとめてZIPかフォルダで開いてください。Firebase Hostingの設定があれば公開用フォルダを自動で選びます。</p></li>
         <li><strong>画面サイズを変えて試す</strong><p>PC・スマホ・カスタムから選べます。カスタムでは幅と高さを入力するか、角のハンドルをドラッグできます。プレビューだけに拡大すると、右上の縮小アイコンが約1秒だけ表示されます。消えたら同じ角をタップして表示し、もう一度タップで戻れます。</p></li>
-        <li><strong>開発ツールで調べる</strong><p>コンソール、要素検索、通信、ファイル、性能、ストレージをプレビューと並べて見られます。ブラウザが外部に公開しない通信の詳細は取得できません。</p></li>
+        <li><strong>開発ツールで調べる</strong><p>コンソール、要素検索、通信、ファイル、性能、ストレージをプレビューと並べて見られます。境界の細い線をドラッグすると広さを変えられます。幅が広い画面では、開発ツールを右にも配置できます。</p></li>
       </ol>
+      <div class="help-note compatibility"><strong>外部通信オンと本番公開は別です</strong><p>HTTPS・WSSの通信を試せますが、相手のCORSやログイン設定は変わりません。本番のURLと同じにはならず、Googleログイン、PWAのインストール、IndexedDB、サーバー処理などは別の環境で確認してください。</p><p>ログインや保存まで確認する場合は、公開用のファイルをローカルサーバーか専用のテスト用ホスティングで開いてください。Firebaseの本番データに接続したくない場合は、エミュレーターか別のテスト用プロジェクトを使います。</p></div>
       <div class="help-note"><strong>ビルドが必要なアプリは</strong><p>TypeScript・JSX・基本的なVite構成をブラウザで簡易変換できます。独自のViteプラグインやサーバー処理があるアプリは、先にビルドして <code>dist</code> などを開いてください。FirebaseログインやPWAインストール、IndexedDBはこのプレビューでは使えません。</p></div>
     </div>
     <div class="help-demo"><div><strong>まずは動きを試す</strong><p>ZipStage内蔵の小さなサンプルです。</p></div><button class="btn primary" id="demo" type="button"><svg><use href="#i-play"/></svg>サンプルで試す</button></div>
   </dialog>
   <dialog id="online-dialog" aria-labelledby="online-title">
     <div class="dialog-head"><h2 id="online-title">外部通信を許可しますか？</h2></div>
-    <div class="dialog-body"><p>ZIP・フォルダ内のコードが外部と通信できるようになります。Firebaseなどの設定によっては、実際のデータを読み書きする場合があります。内容が分かっているアプリで使ってください。</p></div>
+    <div class="dialog-body"><p>ZIP・フォルダ内のコードが外部と通信できるようになります。Firebaseなどの設定によっては、実際のデータを読み書きする場合があります。内容が分かっているアプリで使ってください。許可しても、公開サイトのURLやログイン・ブラウザ保存の条件は再現されません。</p></div>
     <form method="dialog" class="dialog-actions"><button class="btn" value="cancel">キャンセル</button><button class="btn primary" value="enable">外部通信を許可</button></form>
   </dialog>
   <dialog id="storage-dialog" aria-labelledby="storage-title">
