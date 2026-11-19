@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="ZIPにまとめたWebアプリをブラウザだけでプレビュー。">
+  <title>ZipStage — ZIPでWebプレビュー</title>
+  <link rel="icon" type="image/svg+xml" href="./brand.svg">
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <svg class="defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-brand" viewBox="0 0 24 24"><path d="M4 5.5h15.5v13H4zM8 9l3 3-3 3m5 0h3"/><path d="M6 5.5V4h14v12.5"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .6-8A6 6 0 0 0 6 9a4.5 4.5 0 0 0 1 9Z"/><path d="M12 15V9m-2.5 2.5L12 9l2.5 2.5"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3.5h7l4 4.5v12.5H6V3.5zM13 4v5h4.5M10 13h4m-4 3h4"/></symbol>
+    <symbol id="i-screen" viewBox="0 0 24 24"><path d="M4 5h16v11H4zM8 20h8m-4-4v4"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></symbol>
+    <symbol id="i-reload" viewBox="0 0 24 24"><path d="M19 11a7 7 0 1 0-2 6m2-11v5h-5"/></symbol>
+    <symbol id="i-max" viewBox="0 0 24 24"><path d="M9 4H4v5m11-5h5v5m0 6v5h-5m-11-5v5h5"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m9 6-6 6 6 6m6-12 6 6-6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 11v5m0-8v.2"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="6" y="10" width="12" height="10" rx="2"/><path d="M9 10V7a3 3 0 0 1 6 0v3m-3 4v2"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><path d="m5 7 5 5-5 5m7 0h7"/></symbol>
+    <symbol id="i-layer" viewBox="0 0 24 24"><path d="m3 8 9-5 9 5-9 5Zm0 5 9 5 9-5M3 18l9 4 9-4"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M10 9.5a2 2 0 1 1 3 1.7c-1 .6-1 1-1 1.8m0 2.9v.1"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-zip" viewBox="0 0 24 24"><path d="M5 4h5l2 2h7v14H5Zm8 3v3h2v2h-2v3h2v2h-2"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></symbol>
+  </defs></svg>
+  <header class="topbar"><div class="top-in">
+    <a class="brand" href="./"><span class="brand-mark"><svg><use href="#i-brand"/></svg></span><span>Zip<span class="brand-stage">Stage</span></span></a>
+    <div class="top-right"><span class="private-tag"><svg><use href="#i-lock"/></svg>ブラウザ内で処理</span><button type="button" class="btn help-button" id="open-help"><svg><use href="#i-help"/></svg><span>使い方</span></button></div>
+  </div></header>
+  <main class="container">
+    <section class="intro">
+      <p class="eyebrow"><svg><use href="#i-layer"/></svg> WEB PROJECT PREVIEW</p>
+      <h1>ZIPで開く、<span>Webアプリ。</span></h1>
+      <p>HTMLだけじゃなく、CSSやJavaScript、画像もそのまま。<br class="desktop-break">公開用フォルダをZIPにして、ブラウザで動かしてみよう。</p>
+    </section>
+    <div class="workspace">
+      <aside class="side" aria-label="プロジェクト設定">
+        <section class="card upload-card">
+          <div class="card-title"><svg><use href="#i-zip"/></svg><h2>プロジェクト</h2></div>
+          <input id="file" type="file" accept=".zip,.html,.htm,application/zip,text/html" hidden>
+          <button class="drop" id="drop" type="button">
+            <span class="upload-icon"><svg><use href="#i-upload"/></svg></span>
+            <strong>ZIPをドロップ</strong><span class="drop-caption">クリックして選ぶ</span>
+          </button>
+          <p class="quiet upload-meta">ZIP または HTML · ZIPは120 MBまで</p>
+          <div id="busy" class="busy" hidden><progress id="progress" max="100"></progress></div>
+          <div id="project-info" class="project-info" hidden>
+            <span class="file-badge"><svg><use href="#i-file"/></svg></span>
+            <div><strong id="project-name"></strong><span id="project-detail"></span></div>
+          </div>
+          <p id="load-msg" role="status" class="message" hidden></p>
+          <button type="button" class="btn demo-button" id="demo"><svg><use href="#i-code"/></svg><span>サンプルで試す</span></button>
+        </section>
+        <section class="card config-card" id="settings">
+          <div class="card-title"><svg><use href="#i-terminal"/></svg><h2>プレビュー設定</h2></div>
+          <div id="selection" class="selection" hidden>
+            <label for="root">公開フォルダ</label><span class="select-wrap"><select id="root"></select><svg><use href="#i-chevron"/></svg></span>
+            <label for="page">最初に開くページ</label><span class="select-wrap"><select id="page"></select><svg><use href="#i-chevron"/></svg></span>
+          </div>
+          <div class="switch-row"><span><label for="online">外部通信</label><small>CDN・Firebase など</small></span><input type="checkbox" id="online" role="switch" aria-describedby="online-description"></div>
+          <p class="quiet network-note" id="online-description">初期状態ではオフ。外部の画像、スクリプト、API通信をブロックします。</p>
+        </section>
+      </aside>
+      <section class="card preview" id="preview" aria-label="プレビュー">
+        <header class="preview-head">
+          <div class="preview-heading"><span id="signal" class="signal" aria-hidden="true"></span><h2>プレビュー</h2><span hidden id="phase" aria-live="polite"></span></div>
+          <div class="preview-actions">
+            <div class="seg" role="group" aria-label="画面幅">
+              <button class="icon-btn on" type="button" id="desktop" title="PC幅" aria-label="PC幅" aria-pressed="true"><svg><use href="#i-screen"/></svg></button>
+              <button class="icon-btn" type="button" id="mobile" title="スマホ幅" aria-label="スマホ幅" aria-pressed="false"><svg><use href="#i-phone"/></svg></button>
+            </div>
+            <button class="icon-btn plain" type="button" id="reload" title="再読み込み" aria-label="再読み込み" disabled><svg><use href="#i-reload"/></svg></button>
+            <button class="icon-btn plain" type="button" id="fullscreen" title="大きく表示" aria-label="大きく表示"><svg><use href="#i-max"/></svg></button>
+          </div>
+        </header>
+        <div class="browserbar"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><div class="address" id="address"><svg><use href="#i-lock"/></svg><span id="path-label">プレビューするページがありません</span></div><span class="screen-label" id="view-label">PC</span></div>
+        <div class="screen" id="screen" aria-busy="false">
+          <div id="empty" class="empty">
+            <div class="illustration" aria-hidden="true">
+              <svg viewBox="0 0 148 115" fill="none"><path d="M22 29h98v60H22z" stroke="#d4e4ed" stroke-dasharray="3 4"/><rect x="31" y="25" width="84" height="58" rx="8" fill="#f5fbff" stroke="#a8c1cc" stroke-width="1.5"/><path d="M31 39h84" stroke="#a8c1cc" stroke-width="1.5"/><circle cx="40" cy="32" r="1.5" fill="#73a6ad"/><circle cx="45" cy="32" r="1.5" fill="#a8c1cc"/><circle cx="50" cy="32" r="1.5" fill="#c7dbe4"/><path d="m62 51-8 7 8 7m19-14 8 7-8 7m-7-16-5 18" stroke="#087f74" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><rect x="95" y="68" width="28" height="29" rx="6" fill="#d7fbef" stroke="#8ad3bf" stroke-width="1.5"/><path d="M104 77h10m-10 4h8m-8 4h5" stroke="#309b8a" stroke-width="1.6" stroke-linecap="round"/><path d="M19 63h-7m3.5-3.5v7m105-49h8m-4-4v8" stroke="#8ad3bf" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <strong id="empty-title">ZIPを開くと、ここで動きます</strong>
+            <p id="empty-copy">CSS、JavaScript、画像も、フォルダ構成を保ったまま。</p>
+            <span class="formats" aria-label="対応形式"><span>HTML</span><span>CSS</span><span>JavaScript</span><span>画像</span></span>
+          </div>
+          <div id="frame-wrap" class="frame-wrap" hidden></div>
+        </div>
+        <details class="logs" id="log-details"><summary><svg><use href="#i-terminal"/></svg><span>読み込みログ</span><span id="log-count" class="log-count">0</span><svg class="log-chevron"><use href="#i-chevron"/></svg></summary><div id="log-list" class="log-list" aria-label="ログ"><p class="quiet">ここに読み込みエラーなどが表示されます。</p></div></details>
+      </section>
+    </div>
+    <footer class="foot"><p><svg><use href="#i-lock"/></svg>選んだファイルはサーバーにアップロードされません。</p><p>ZIP PREVIEW WORKSPACE</p></footer>
+  </main>
+  <dialog id="help-dialog" aria-labelledby="help-title">
+    <div class="dialog-head"><h2 id="help-title">ZIPの作り方</h2><form method="dialog"><button class="btn" aria-label="使い方を閉じる">閉じる</button></form></div>
+    <ol class="instructions">
+      <li><strong>公開用フォルダを探す</strong><p><code>firebase.json</code> がある場合は <code>hosting.public</code> を確認。フォルダに <code>index.html</code> があることを確認します。</p></li>
+      <li><strong>フォルダごとZIPにする</strong><p>CSS・JS・画像も一緒に入れます。Viteなどは、先に <code>npm run build</code> で作った <code>dist</code> をZIPにします。</p></li>
+      <li><strong>ここに置いて試す</strong><p>ページ切り替え、PCとスマホの幅、読み込みログで表示を確認できます。</p></li>
+    </ol>
+    <div class="help-note"><strong>公開や本番テストとは違います</strong><p>画面と操作の確認用です。Firebase Authのポップアップ／リダイレクト、PWAのインストール、サーバー処理の起動はできません。外部通信をオンにすると、ZIP内のコードが実際のAPIやデータベースに接続を試みます。</p></div>
+  </dialog>
+  <dialog id="online-dialog" aria-labelledby="online-title">
+    <div class="dialog-head"><h2 id="online-title">外部通信を許可しますか？</h2></div>
+    <p>ZIP内のコードが外部サイトへ通信できます。Firebaseが設定されていると、実際のデータを読み書きする場合があります。内容が分かっている、自分のZIPで使ってください。</p>
+    <form method="dialog" class="dialog-actions"><button class="btn" value="cancel">キャンセル</button><button class="btn primary" value="enable">外部通信を許可</button></form>
+  </dialog>
+</body>
+</html>
