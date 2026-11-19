@@ -24,16 +24,10 @@ function zipstageRoutes(p,files,rewrites) {
   }
   return null;
 }
-function zipstageBootstrap(token, online) {
+function zipstageBootstrap(token, online, policy) {
   const send = (type, value) => parent.postMessage({zipstage:token,type,value}, '*');
   const shorten = (value,max=500) => String(value ?? '').slice(0,max);
   const origin = 'https://zipstage.invalid';
-  const remote = online ? ' https:' : '';
-  const policy = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob: data:" + remote +
-    "; style-src 'unsafe-inline' blob: data:" + remote + "; img-src blob: data:" + remote +
-    "; font-src blob: data:" + remote + "; media-src blob: data:" + remote +
-    "; connect-src blob: data:" + (online?' https: wss:':'') +
-    "; worker-src blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; manifest-src blob: data:; block-all-mixed-content";
   const safeJSON = value => JSON.stringify(value).replace(/</g,'\\u003c');
   const encodePath = p => p.split('/').map(encodeURIComponent).join('/');
   const virtual = p => origin+'/'+encodePath(p);
@@ -195,7 +189,7 @@ function zipstageBootstrap(token, online) {
     });
     if(parsed.body?.tagName==='FRAMESET')throw new Error('フレームセットには対応していません。');
     const defaultDoctype=parsed.doctype?.name.toLowerCase()==='html'?'<!doctype html>':'';
-    const startingMap = Object.create(null);
+    const startingMap = Object.create(null), mappedTargets = new Map(), preblocked = new Map();
     for(const el of parsed.querySelectorAll('script[type="importmap"]')){
       try{
         const map=JSON.parse(el.textContent);
@@ -203,6 +197,7 @@ function zipstageBootstrap(token, online) {
           const u=resolve(url,docBase);
           const n=looksResolved(name)?specifier(name,docBase):name;
           const p=modulePath(localPath(u)??'');
+          if(u)mappedTargets.set(n,u);
           startingMap[n]=u?.origin===origin&&p?await makeModule(p):u?.href??url;
         }
       }catch{}
@@ -211,6 +206,39 @@ function zipstageBootstrap(token, online) {
     const hasModules=parsed.querySelector('script[type="module"]') || [...parsed.querySelectorAll('script:not([src])')].some(e=>/\bimport\s*\(/.test(e.textContent));
     if(hasModules){
       for(const p of files.keys())if(isCode(p)||/\.(?:css|json|svg|png|jpe?g|webp|gif|avif|woff2?|ttf|ico|mp3|wav)$/i.test(p))await makeModule(p);
+    }
+    const moduleLists=new Map();
+    const isOffsiteScript=u=>u&&localPath(u)===null&&/^https?:$/.test(u.protocol);
+    function staticImports(code,base){
+      try{return parse(code,base)[0].filter(item=>item.d===-1&&typeof item.n==='string').map(item=>item.n);}
+      catch{return [];}
+    }
+    async function offlineDependencies(deps,base){
+      const blocked=new Set(), checked=new Set(), queue=deps.map(name=>[name,base]);
+      for(let i=0;i<queue.length&&i<1600&&blocked.size<40;i++){
+        const [name,from]=queue[i];
+        let url=mappedTargets.get(name);
+        if(!url&&(name.startsWith('@/')||name.startsWith('~/'))){
+          const alias=modulePath('src/'+name.slice(2));
+          if(alias)url=resolve(virtual(alias));
+        }
+        if(!url&&looksResolved(name))url=resolve(name,from);
+        if(!url)continue;
+        if(isOffsiteScript(url)){blocked.add(url.href);continue;}
+        const p=modulePath(localPath(url)??'');
+        if(!p||!isCode(p)||checked.has(p))continue;
+        checked.add(p);
+        if(!moduleLists.has(p))moduleLists.set(p,staticImports(await files.get(p).text(),virtual(p)));
+        for(const item of moduleLists.get(p))queue.push([item,virtual(p)]);
+      }
+      return [...blocked];
+    }
+    function blockScript(el,urls){
+      // Keep the real offline CSP in place. Avoid scheduling a request known to be denied.
+      for(const url of urls)if(preblocked.size<90)preblocked.set(url,'script-src-elem');
+      el.removeAttribute('src');el.removeAttribute('integrity');
+      el.type='application/x-zipstage-offline';el.textContent='';
+      el.setAttribute('data-zipstage-offline','true');
     }
     for(const el of parsed.querySelectorAll('[src],[href],[poster],[srcset],[data-src], style,[style]')){
       if(el.closest('template'))continue;
@@ -225,6 +253,13 @@ function zipstageBootstrap(token, online) {
       }
       if(tag==='script'&&get('src')){
         const raw=get('src'), u=resolve(raw), p=localPath(u), isModule=el.type.toLowerCase()==='module';
+        if(!online){
+          if(isOffsiteScript(u)){blockScript(el,[u.href]);continue;}
+          if(p!==null&&(isModule||transpiled.has(p))){
+            const blocked=await offlineDependencies([virtual(p)],docBase);
+            if(blocked.length){blockScript(el,blocked);continue;}
+          }
+        }
         if(p!==null){
           const local=modulePath(p)??p;
           if(isModule||transpiled.has(local)){
@@ -243,7 +278,13 @@ function zipstageBootstrap(token, online) {
       if(tag==='style')el.textContent=(await cssText(el.textContent,docBase,new Set())).replace(/<\/style/gi,'<\\/style');
     }
     for(const el of parsed.querySelectorAll('script:not([src])')){
-      if(!el.type || ['module','text/javascript','application/javascript'].includes(el.type.toLowerCase()))el.textContent=rewriteJS(el.textContent,docBase).replace(/<\/script/gi,'<\\/script');
+      if(el.closest('template'))continue;
+      const type=el.type.toLowerCase();
+      if(!online&&type==='module'){
+        const blocked=await offlineDependencies(staticImports(el.textContent,docBase),docBase);
+        if(blocked.length){blockScript(el,blocked);continue;}
+      }
+      if(!type || ['module','text/javascript','application/javascript'].includes(type))el.textContent=rewriteJS(el.textContent,docBase).replace(/<\/script/gi,'<\\/script');
     }
     for(const el of parsed.querySelectorAll('a[ping],area[ping]'))el.removeAttribute('ping');
     const attributeCopy = node => [...node.attributes].map(a=>' '+a.name+'="'+a.value.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;')+'"').join('');
@@ -277,6 +318,7 @@ function zipstageBootstrap(token, online) {
         e.preventDefault();navigate(raw);
       });
       addEventListener('DOMContentLoaded',()=>{
+        for(const el of document.querySelectorAll('script[data-zipstage-offline="true"]'))el.dispatchEvent(new Event('error'));
         if(hash){try{history.replaceState(null,'',hash);}catch{}let id=hash.slice(1);try{id=decodeURIComponent(id);}catch{}document.getElementById(id)?.scrollIntoView();}
         send('rendered',{title:shorten(document.title,100),viewport:[innerWidth,innerHeight]});
       },{once:true});
@@ -286,9 +328,6 @@ function zipstageBootstrap(token, online) {
       };
       addEventListener('error',onError,true);
       addEventListener('unhandledrejection',e=>send('log',{level:'error',message:shorten(e.reason?.message??e.reason??'未処理のエラー')}));
-      document.addEventListener('securitypolicyviolation',e=>{
-        if(['connect-src','script-src-elem','style-src-elem','img-src','media-src','font-src'].includes(e.effectiveDirective)&&/^https?:/.test(e.blockedURI)&&!online)send('log',{level:'info',message:'外部通信をブロック · '+shorten(e.blockedURI,230)});
-      });
       const storageFor=(type)=>{
         const map=new Map(Object.entries(storage?.[type]??{}));
         const save=()=>send('storage',{type,entries:[...map]});
@@ -338,7 +377,7 @@ function zipstageBootstrap(token, online) {
           if(d?.set&&d.configurable)Object.defineProperty(ctor.prototype,attr,{...d,set(value){d.set.call(this,runtimeValue(this,attr,value));}});
         }
       }
-      if(typeof zipstageDev==='function')zipstageDev(send,token,{resolve,localPath,blobPaths,online,route:'/'+(request||page)+(query||'')+(hash||'')});
+      if(typeof zipstageDev==='function')zipstageDev(send,token,{resolve,localPath,blobPaths,online,preblocked,route:'/'+(request||page)+(query||'')+(hash||'')});
       const NativeAudio=window.Audio;
       if(NativeAudio) window.Audio=new Proxy(NativeAudio,{construct(Target,args){
         const audio=new Target();if(args.length)audio.src=args[0];return audio;

@@ -3,6 +3,8 @@ import {scan,expand} from './project.mjs';
 import {normalizeEntries,listDrop,projectKey,SavedProjects,safeStorage,compile,prettySize,fitViewport,clamp,describePage,appSignature} from './workspace.mjs';
 import {createPicker} from './picker.mjs';
 import {toolDock} from './tool-dock.mjs';
+import {cancelMotion,rectOf,playFlip,enterContent,flashIcon,cornerToggle} from './motion.mjs';
+import {previewPolicy} from './policy.mjs';
 
 const $=id=>document.getElementById(id);
 const state={job:0,gen:0,archive:null,projects:[],project:null,items:null,original:null,frame:null,session:null,online:false,cdn:false,view:'desktop',focus:'',open:false,storage:{},packages:{},transformed:[],sourceRoot:'',history:[],index:-1,custom:[900,640],persist:false};
@@ -14,7 +16,7 @@ const bridge=(action,value)=>{
   frame.contentWindow.postMessage({zipstage:session.token,type:'dev',value:{action,value}},'*');return true;
 };
 const sourceFiles=()=>state.original??[];
-const dock=toolDock($,bridge,{files:sourceFiles,storage:()=>state.storage,openStorage,metadata:()=>({online:state.online,phase:state.frame?'プレビュー中':'未起動',compiler:state.transformed.length,duration:state.startMs})});
+const dock=toolDock($,bridge,{files:sourceFiles,storage:()=>state.storage,openStorage,reflow:resizeStage,metadata:()=>({online:state.online,phase:state.frame?'プレビュー中':'未起動',compiler:state.transformed.length,duration:state.startMs})});
 const pickers={
   root:createPicker($('root-picker'),'root-label',i=>selectProject(Number(i))),
   page:createPicker($('page-picker'),'page-label',page=>navigate({page}))
@@ -179,9 +181,8 @@ async function start({keep=false}={}){
   try{
     const raw=await runnerCode();if(gen!==state.gen)return;
     const frame=document.createElement('iframe');frame.title='Webアプリのプレビュー';frame.setAttribute('sandbox','allow-scripts');frame.referrerPolicy='no-referrer';
-    const remote=online?' https:':'';
-    const csp="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob: data:"+remote+"; style-src 'unsafe-inline' blob: data:"+remote+"; img-src blob: data:"+remote+"; font-src blob: data:"+remote+"; media-src blob: data:"+remote+"; connect-src blob: data:"+(online?' https: wss:':'')+"; worker-src blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; manifest-src blob: data:;";
-    frame.srcdoc='<!doctype html><meta charset="UTF-8"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="'+csp+'"><script>'+raw+'\nzipstageBootstrap('+JSON.stringify(token)+','+online+');<\/script>';
+    const csp=previewPolicy(online);
+    frame.srcdoc='<!doctype html><meta charset="UTF-8"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="'+csp+'"><script>'+raw+'\nzipstageBootstrap('+JSON.stringify(token)+','+online+','+JSON.stringify(csp)+');<\/script>';
     state.frame=frame;state.session={token,gen,ready:false,done:false,watch:setTimeout(()=>{
       if(state.session?.token!==token||state.session.done)return;
       loading(false);$('empty').hidden=true;phase('応答待ち','error');
@@ -201,7 +202,7 @@ window.addEventListener('message',e=>{
   }else if(type==='rendered'&&!session.done){
     session.done=true;clearTimeout(session.watch);
     state.startMs=Math.round(performance.now()-state.launchAt);loading(false);$('empty').hidden=true;
-    phase('実行中','ready');$('focus-preview').disabled=false;dock.ready();measure();
+    phase('実行中','ready');$('focus-preview').disabled=false;dock.ready();measure();enterContent($('frame-shell'),{duration:170,y:2});
   }else if(type==='fatal'&&!session.done){
     failure(value,'表示できませんでした');dock.open('console');
   }else if(type==='navigate'&&state.project?.pages.includes(value?.page)&&typeof value.hash==='string'){
@@ -242,7 +243,7 @@ window.addEventListener('drop',async e=>{
   }catch(e){if(job===state.job)failure(e);}
 });
 $('demo').onclick=async()=>{
-  const job=state.job;$('demo').disabled=true;
+  const job=state.job;$('demo').disabled=true;$('help-dialog').close();
   try{
     const r=await fetch('./sample.zip');if(!r.ok)throw Error('サンプルを開けませんでした。');
     const b=await r.blob();if(job===state.job)void inspect(b,'ZipStage-sample.zip','zip');
@@ -255,16 +256,37 @@ $('close-sidebar').onclick=()=>switchSidebar(false);
 document.addEventListener('pointerdown',e=>{
   if($('sidebar').classList.contains('open')&&!e.target.closest('.sidebar,.compact-menu,.picker-menu,dialog'))switchSidebar(false);
 });
+function resizeStage(change){
+  const shell=$('frame-shell'), before=rectOf(shell);
+  cancelMotion(shell);change();measure();playFlip(shell,before,205);
+}
+const focusButton=$('exit-focus'), viewPanel=$('preview'), frameShell=$('frame-shell');
+const corner=cornerToggle(
+  ()=>{focusButton.classList.add('is-visible');focusButton.setAttribute('aria-label','プレビューのみ表示を終了');},
+  ()=>{focusButton.classList.remove('is-visible');focusButton.setAttribute('aria-label','右上の縮小ボタンを表示');},
+  ()=>{setFocus('workspace');$('focus-preview').focus({preventScroll:true});}
+);
 function setFocus(value){
+  const prev=state.focus;
+  if(prev===value)return;
+  const sameOuter=!!prev===!!value;
+  const target=sameOuter?frameShell:viewPanel;
+  const before=rectOf(target);
+  cancelMotion(frameShell);cancelMotion(viewPanel);
+  pickers.root.close();pickers.page.close();switchSidebar(false);
+  if(prev==='only')corner.leave();
   state.focus=value;document.body.dataset.focus=value;
-  $('focus-exit').hidden=value!=='only';$('focus-preview').hidden=value!=='workspace';
-  $('fullscreen').setAttribute('aria-label',value==='workspace'?'作業領域の拡大を終了':'作業領域を拡大');
-  $('fullscreen').title=$('fullscreen').getAttribute('aria-label');
-  requestAnimationFrame(measure);
+  focusButton.hidden=value!=='only';$('focus-preview').hidden=value!=='workspace';
+  if(value==='only')corner.enter();
+  const expanded=value==='workspace';
+  const button=$('fullscreen'), label=expanded?'作業領域を縮小':'作業領域を拡大';
+  button.setAttribute('aria-label',label);button.setAttribute('aria-pressed',String(expanded));button.title=label;
+  $('workspace-icon').setAttribute('href',expanded?'#i-min':'#i-max');flashIcon(button.querySelector('svg'));
+  measure();playFlip(target,before,sameOuter?235:265);
 }
 $('fullscreen').onclick=()=>setFocus(state.focus==='workspace'?'':'workspace');
-$('focus-preview').onclick=()=>{if(state.session?.done){setFocus('only');$('exit-focus').focus({preventScroll:true});}};
-$('exit-focus').onclick=()=>{setFocus('workspace');$('focus-preview').focus({preventScroll:true});};
+$('focus-preview').onclick=()=>{if(state.session?.done){setFocus('only');focusButton.focus({preventScroll:true});}};
+focusButton.onclick=()=>corner.press();
 window.addEventListener('keydown',e=>{
   if(e.defaultPrevented||e.key!=='Escape'||document.querySelector('dialog[open]'))return;
   if(state.focus){setFocus(state.focus==='only'?'workspace':'');e.preventDefault();}
@@ -281,34 +303,46 @@ function measure(){
   $('view-label').textContent=w+' × '+h;$('view-label').title=w+' × '+h+' px';
 }
 function setView(value){
+  const before=rectOf(frameShell);cancelMotion(frameShell);
   state.view=value;$('sizebar').hidden=value!=='custom';$('resize-handle').hidden=value!=='custom';
   for(const v of ['desktop','mobile','custom']){$(v).classList.toggle('on',v===value);$(v).setAttribute('aria-pressed',String(v===value));}
-  requestAnimationFrame(measure);
+  measure();playFlip(frameShell,before,240);
 }
 for(const v of ['desktop','mobile','custom'])$(v).onclick=()=>setView(v);
 if(window.ResizeObserver)new ResizeObserver(()=>measure()).observe($('screen'));
 window.addEventListener('resize',measure);
-function custom(w,h){
+function custom(w,h,animate=false){
+  const before=animate?rectOf(frameShell):null;
+  if(animate)cancelMotion(frameShell);
   if(Number.isFinite(w))state.custom[0]=clamp(w,240,3840);
   if(Number.isFinite(h))state.custom[1]=clamp(h,200,2160);
   $('width').value=state.custom[0];$('height').value=state.custom[1];measure();
+  if(animate)playFlip(frameShell,before,195);
 }
 for(const name of ['width','height']){
-  $(name).addEventListener('change',()=>custom($('width').valueAsNumber,$('height').valueAsNumber));
-  $(name).addEventListener('keydown',e=>{if(e.key==='Enter'){custom($('width').valueAsNumber,$('height').valueAsNumber);e.target.blur();}});
+  $(name).addEventListener('change',()=>custom($('width').valueAsNumber,$('height').valueAsNumber,true));
+  $(name).addEventListener('keydown',e=>{if(e.key==='Enter'){custom($('width').valueAsNumber,$('height').valueAsNumber,true);e.target.blur();}});
 }
-let drag;
+let drag, dragFrame=0, dragPoint;
 const handle=$('resize-handle');
 handle.onpointerdown=e=>{
   if(e.button!==0)return;e.preventDefault();
+  cancelMotion(frameShell);
   drag={id:e.pointerId,x:e.clientX,y:e.clientY,dims:[...state.custom],ratio:state.ratio||1};
   handle.setPointerCapture(e.pointerId);
 };
+function dragResize(){
+  dragFrame=0;
+  if(!drag||!dragPoint)return;
+  const [x,y]=dragPoint;dragPoint=null;
+  custom(drag.dims[0]+(x-drag.x)/drag.ratio,drag.dims[1]+(y-drag.y)/drag.ratio);
+}
 handle.onpointermove=e=>{
   if(e.pointerId!==drag?.id)return;
-  custom(drag.dims[0]+(e.clientX-drag.x)/drag.ratio,drag.dims[1]+(e.clientY-drag.y)/drag.ratio);
+  dragPoint=[e.clientX,e.clientY];
+  if(!dragFrame)dragFrame=requestAnimationFrame(dragResize);
 };
-handle.onlostpointercapture=handle.onpointerup=handle.onpointercancel=()=>{drag=null;};
+handle.onlostpointercapture=handle.onpointerup=handle.onpointercancel=()=>{if(dragFrame)cancelAnimationFrame(dragFrame);dragResize();drag=null;dragPoint=null;};
 handle.onkeydown=e=>{
   const delta={ArrowLeft:[-10,0],ArrowRight:[10,0],ArrowUp:[0,-10],ArrowDown:[0,10]}[e.key];
   if(delta){e.preventDefault();custom(state.custom[0]+delta[0],state.custom[1]+delta[1]);}

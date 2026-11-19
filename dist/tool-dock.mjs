@@ -1,4 +1,6 @@
 import {prettySize} from './workspace.mjs';
+import {createPicker} from './picker.mjs';
+import {enterContent} from './motion.mjs';
 
 const create=(tag,text,cls)=>{
   const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;
@@ -19,9 +21,9 @@ const textJSON=value=>JSON.stringify(value,null,2);
 const filters={console:'',elements:'',network:'',sources:''};
 const names={console:'コンソール',elements:'要素',network:'通信',sources:'ファイル',performance:'性能',application:'ストレージ'};
 export function toolDock($,bridge,ctx){
-  const host=$('tool-content'), toggle=$('tool-toggle'), buttons=[...$('tool-tabs').querySelectorAll('[data-key]')];
+  const host=$('tool-content'), drawer=$('tool-drawer'), toggle=$('tool-toggle'), buttons=[...$('tool-tabs').querySelectorAll('[data-key]')];
   let tab='console', isOpen=false, scheduled=false, view={}, logs=[], net=new Map(), metrics=null,
-    elements=null, info=null,picking=false, selectedFile='',selectedNet='',panelVersion=0,netMessage='',level='all',fileVersion=0,autoScroll=true,keepAfterReload=false;
+    elements=null, info=null,picking=false, selectedFile='',selectedNet='',panelVersion=0,netMessage='',level='all',fileVersion=0,autoScroll=true,keepAfterReload=false,levelPicker=null,closingTimer=0;
   function update(){
     if(scheduled)return;scheduled=true;
     requestAnimationFrame(()=>{
@@ -51,24 +53,33 @@ export function toolDock($,bridge,ctx){
   function open(key=tab){
     if(!names[key])key='console';
     if(tab==='elements'&&key!=='elements'&&picking){picking=false;bridge('pick',false);}
-    tab=key;isOpen=true;host.hidden=false;toggle.setAttribute('aria-expanded','true');
+    const wasOpen=isOpen,changed=tab!==key;
+    tab=key;isOpen=true;host.inert=false;host.setAttribute('aria-hidden','false');toggle.setAttribute('aria-expanded','true');
     host.setAttribute('aria-labelledby','tab-'+key);
     for(const b of buttons){const same=b.dataset.key===key;b.tabIndex=same?0:-1;b.setAttribute('aria-selected',String(same));}
-    mount();
+    clearTimeout(closingTimer);drawer.classList.remove('is-closing');
+    if(!wasOpen||changed)ctx.reflow(()=>{
+      drawer.classList.add('is-open');mount();
+    });
+    if(wasOpen&&changed)enterContent(host,{duration:135,y:0});
   }
   function close(){
     if(picking){picking=false;bridge('pick',false);}
-    isOpen=false;host.hidden=true;toggle.setAttribute('aria-expanded','false');view={};panelVersion++;
+    isOpen=false;levelPicker?.close();host.inert=true;host.setAttribute('aria-hidden','true');toggle.setAttribute('aria-expanded','false');
+    ctx.reflow(()=>{drawer.classList.remove('is-open');drawer.classList.add('is-closing');});
+    clearTimeout(closingTimer);closingTimer=setTimeout(()=>drawer.classList.remove('is-closing'),175);
+    view={};panelVersion++;
   }
   function mount(){
-    panelVersion++;host.replaceChildren();view={};
+    panelVersion++;levelPicker?.destroy();levelPicker=null;host.replaceChildren();view={};
     if(tab==='console'){
-      const select=create('select');select.setAttribute('aria-label','ログレベル');
-      for(const [val,label] of [['all','すべて'],['error','エラー'],['warn','警告'],['normal','情報・結果']])select.append(new Option(label,val));
-      select.value=level;select.onchange=()=>{level=select.value;update();};
+      const filter=create('div');filter.id='log-picker';
+      const levelLabel=create('span','ログレベル','sr-only');levelLabel.id='log-level-label';filter.append(levelLabel);
+      levelPicker=createPicker(filter,levelLabel.id,value=>{level=value;update();});
+      levelPicker.set([['all','すべて'],['error','エラー'],['warn','警告'],['normal','情報・結果']].map(([value,label])=>({value,label})),level);
       const keep=action('保持',()=>{keepAfterReload=!keepAfterReload;keep.setAttribute('aria-pressed',String(keepAfterReload));});
       keep.title='再読み込みしてもログを保持';keep.setAttribute('aria-label',keep.title);keep.setAttribute('aria-pressed',String(keepAfterReload));
-      controls(search(tab,'コンソールを検索'),select,keep,action('消去',()=>{logs=[];update();}),action('コピー',()=>copy(logs.map(x=>x.time+' '+(levelNames[x.level]??x.level)+' '+x.message).join('\n'))));
+      controls(search(tab,'コンソールを検索'),filter,keep,action('消去',()=>{logs=[];update();}),action('コピー',()=>copy(logs.map(x=>x.time+' '+(levelNames[x.level]??x.level)+' '+x.message).join('\n'))));
       view.list=body();view.list.setAttribute('aria-label','ログ');
       view.list.onscroll=()=>{autoScroll=view.list.scrollHeight-view.list.scrollTop-view.list.clientHeight<22;};
       const form=create('form',undefined,'console-entry');

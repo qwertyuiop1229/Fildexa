@@ -9,6 +9,7 @@
   <link rel="icon" type="image/svg+xml" href="./brand.svg">
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./studio.css">
+  <link rel="stylesheet" href="./motion.css">
   <script type="module" src="./app.mjs"></script>
 </head>
 <body>
@@ -20,6 +21,7 @@
     <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></symbol>
     <symbol id="i-reload" viewBox="0 0 24 24"><path d="M19 11a7 7 0 1 0-2 6m2-11v5h-5"/></symbol>
     <symbol id="i-max" viewBox="0 0 24 24"><path d="M9 4H4v5m11-5h5v5m0 6v5h-5m-11-5v5h5"/></symbol>
+    <symbol id="i-min" viewBox="0 0 24 24"><path d="M4 9h5V4m11 5h-5V4M4 15h5v5m11-5h-5v5"/></symbol>
     <symbol id="i-code" viewBox="0 0 24 24"><path d="m9 6-6 6 6 6m6-12 6 6-6 6"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 11v5m0-8v.2"/></symbol>
@@ -60,7 +62,6 @@
           <button class="btn" id="choose-file" type="button"><svg><use href="#i-zip"/></svg>ファイル</button>
           <button class="btn" id="choose-folder" type="button"><svg><use href="#i-folder"/></svg>フォルダ</button>
         </div>
-        <button class="btn demo-button" id="demo" type="button"><svg><use href="#i-play"/></svg>サンプルで試す</button>
         <div id="project-info" class="project-info" hidden><span class="file-badge"><svg><use href="#i-file"/></svg></span><div><strong id="project-name"></strong><span id="project-detail"></span></div></div>
         <p id="load-msg" role="status" class="message" hidden></p>
       </section>
@@ -92,7 +93,7 @@
             <button class="icon-btn" type="button" id="mobile" title="スマホ幅" aria-label="スマホ幅" aria-pressed="false"><svg><use href="#i-phone"/></svg></button>
             <button class="icon-btn" type="button" id="custom" title="カスタムサイズ" aria-label="カスタムサイズ" aria-pressed="false"><svg><use href="#i-settings"/></svg></button>
           </div>
-          <button class="icon-btn chrome-btn" type="button" id="fullscreen" title="作業領域を拡大" aria-label="作業領域を拡大"><svg><use href="#i-max"/></svg></button>
+          <button class="icon-btn chrome-btn" type="button" id="fullscreen" title="作業領域を拡大" aria-label="作業領域を拡大" aria-pressed="false"><svg><use id="workspace-icon" href="#i-max"/></svg></button>
         </div>
       </header>
       <div class="browserbar">
@@ -108,7 +109,6 @@
         <span class="size-copy">カスタム</span><label for="width"><span>幅</span> <input type="number" inputmode="numeric" min="240" max="3840" id="width" value="900"></label>
         <span aria-hidden="true">×</span><label for="height"><span>高さ</span> <input type="number" inputmode="numeric" min="200" max="2160" id="height" value="640"></label><span class="size-copy">px · 右下をドラッグ</span>
       </div>
-      <div class="focus-exit" id="focus-exit" hidden><button type="button" class="btn" id="exit-focus"><svg><use href="#i-close"/></svg>プレビューのみ表示を終了</button></div>
       <div class="screen" id="screen" aria-busy="false">
         <div id="empty" class="empty">
           <div class="empty-art" aria-hidden="true"><span class="art-back"></span><span class="art-front"><svg><use href="#i-code"/></svg></span><span class="art-zip"><svg><use href="#i-zip"/></svg></span></div>
@@ -121,6 +121,7 @@
         </div>
         <div id="frame-shell" class="frame-shell" hidden><div id="frame-wrap" class="frame-wrap"></div><button class="resize-handle" id="resize-handle" type="button" aria-label="ビューポートのサイズ調整" title="ドラッグでサイズ変更" hidden><svg><use href="#i-drag"/></svg></button></div>
       </div>
+      <button type="button" class="focus-exit" id="exit-focus" aria-label="右上の縮小ボタンを表示" hidden><span><svg><use href="#i-min"/></svg></span></button>
       <section class="tools" id="tools" aria-label="開発ツール">
         <div class="tool-head">
           <button class="btn dock-toggle" id="tool-toggle" aria-expanded="false" aria-controls="tool-content"><svg><use href="#i-terminal"/></svg><span>開発ツール</span><span class="log-count" id="log-count">0</span></button>
@@ -134,7 +135,7 @@
           </div>
           <button class="icon-btn chrome-btn" type="button" id="focus-preview" title="プレビュー画面だけ拡大" aria-label="プレビュー画面だけ拡大" hidden><svg><use href="#i-max"/></svg></button>
         </div>
-        <div id="tool-content" role="tabpanel" aria-labelledby="tab-console" class="tool-content" hidden></div>
+        <div class="tool-drawer" id="tool-drawer"><div id="tool-content" role="tabpanel" aria-labelledby="tab-console" class="tool-content" aria-hidden="true" inert></div></div>
       </section>
     </section>
   </main>
@@ -143,11 +144,12 @@
     <div class="dialog-body">
       <ol class="instructions">
         <li><strong>ZIP・フォルダ・HTMLを開く</strong><p>CSSや画像も使うときは、まとめてZIPかフォルダで開いてください。Firebase Hostingの設定があれば公開用フォルダを自動で選びます。</p></li>
-        <li><strong>画面サイズを変えて試す</strong><p>PC・スマホ・カスタムから選べます。カスタムでは幅と高さを入力するか、角のハンドルをドラッグできます。拡大表示は画面外の終了ボタンで戻せます。</p></li>
+        <li><strong>画面サイズを変えて試す</strong><p>PC・スマホ・カスタムから選べます。カスタムでは幅と高さを入力するか、角のハンドルをドラッグできます。プレビューだけに拡大すると、右上の縮小アイコンが約1秒だけ表示されます。消えたら同じ角をタップして表示し、もう一度タップで戻れます。</p></li>
         <li><strong>開発ツールで調べる</strong><p>コンソール、要素検索、通信、ファイル、性能、ストレージをプレビューと並べて見られます。ブラウザが外部に公開しない通信の詳細は取得できません。</p></li>
       </ol>
       <div class="help-note"><strong>ビルドが必要なアプリは</strong><p>TypeScript・JSX・基本的なVite構成をブラウザで簡易変換できます。独自のViteプラグインやサーバー処理があるアプリは、先にビルドして <code>dist</code> などを開いてください。FirebaseログインやPWAインストール、IndexedDBはこのプレビューでは使えません。</p></div>
     </div>
+    <div class="help-demo"><div><strong>まずは動きを試す</strong><p>ZipStage内蔵の小さなサンプルです。</p></div><button class="btn primary" id="demo" type="button"><svg><use href="#i-play"/></svg>サンプルで試す</button></div>
   </dialog>
   <dialog id="online-dialog" aria-labelledby="online-title">
     <div class="dialog-head"><h2 id="online-title">外部通信を許可しますか？</h2></div>

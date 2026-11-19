@@ -1,4 +1,4 @@
-function zipstageDev(send, token, {resolve, localPath, blobPaths, online, route}) {
+function zipstageDev(send, token, {resolve, localPath, blobPaths, online, preblocked, route}) {
   let serial=0, active=0, picked=null, overlay=null, nextNode=0;
   const nodes=new Map(), ids=new WeakMap(), initialInline=new WeakMap();
   const n = value => Number.isFinite(value)?Math.max(0,Math.round(value)):null;
@@ -122,8 +122,23 @@ function zipstageDev(send, token, {resolve, localPath, blobPaths, online, route}
       const ok=beacon(url,...args);network('Beacon',url,{phase:ok?'queued':'failed',method:'POST'});return ok;
     };}catch{}
   }
+  const denied=new Set(), notedHosts=new Set();
+  function blocked(raw,directive){
+    const url=cleanURL(raw),key=directive+' '+url;
+    if(!url||denied.has(key)||denied.size>=160)return;
+    denied.add(key);
+    network('CSP',raw,{phase:'blocked',error:short(directive,80)});
+    if(!online){
+      const u=resolve(raw);
+      if(u&&/^https?:$|^wss?:$/.test(u.protocol)&&!notedHosts.has(u.host)){
+        notedHosts.add(u.host);
+        send('log',{level:'info',message:'外部通信オフ · '+u.host+' をブロックしました。URLは「通信」で確認できます。'});
+      }
+    }
+  }
+  for(const [url,directive] of preblocked??[])blocked(url,directive);
   document.addEventListener('securitypolicyviolation',e=>{
-    if(e.blockedURI)network('CSP',e.blockedURI,{phase:'blocked',error:short(e.effectiveDirective,80)});
+    if(e.blockedURI)blocked(e.blockedURI,e.effectiveDirective);
   });
   addEventListener('error',e=>{
     if(e.target?.getAttribute){const raw=e.target.getAttribute('src')??e.target.getAttribute('href');if(raw)network(e.target.localName,raw,{phase:'failed'});}
