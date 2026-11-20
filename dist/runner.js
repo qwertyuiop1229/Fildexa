@@ -42,14 +42,14 @@ function zipstageBootstrap(token, online, policy) {
     catch(err) {send('fatal',shorten(err?.message||err));}
   });
   send('ready');
-  async function render({items,page,rewrites,storage,hash,query,request,packages,cdn,transformed}) {
+  async function render({items,page,rewrites,storage,hash,query,request,packages,cdn,transformed,lab,scroll}) {
     const files=new Map(items), pageURL=virtual(page), transpiled=new Set(transformed??[]);
     const assets=new Map(), css=new Map(), modules=new Map(), moduleMap=Object.create(null), missing=new Set(), blobPaths=new Map();
     function makeBlob(blob,path){const url=URL.createObjectURL(blob);if(path)blobPaths.set(url,path);return url;}
     let docBase=pageURL;
     const reportMissing = p => {
       if(!p||missing.has(p)||missing.size>=60)return;
-      missing.add(p);send('log',{level:'warn',message:'ZIPに見つかりません · '+shorten(p,260)});
+      missing.add(p);send('lab-issue',{id:'missing'});send('log',{level:'warn',message:'ZIPに見つかりません · '+shorten(p,260)});
     };
     const getResource = (p, sha='') => {
       if(!files.has(p))return null;
@@ -320,14 +320,15 @@ function zipstageBootstrap(token, online, policy) {
       addEventListener('DOMContentLoaded',()=>{
         for(const el of document.querySelectorAll('script[data-zipstage-offline="true"]'))el.dispatchEvent(new Event('error'));
         if(hash){try{history.replaceState(null,'',hash);}catch{}let id=hash.slice(1);try{id=decodeURIComponent(id);}catch{}document.getElementById(id)?.scrollIntoView();}
+        if(Number.isFinite(scroll)&&scroll>0)requestAnimationFrame(()=>scrollTo(0,scroll));
         send('rendered',{title:shorten(document.title,100),viewport:[innerWidth,innerHeight]});
       },{once:true});
       const onError=(e)=>{
-        if(e instanceof ErrorEvent)send('log',{level:'error',message:shorten(e.message||'JavaScriptエラー')});
+        if(e instanceof ErrorEvent){send('lab-issue',{id:'js'});send('log',{level:'error',message:shorten(e.message||'JavaScriptエラー')});}
         else if(e.target?.getAttribute){const target=e.target.getAttribute('src')||e.target.getAttribute('href');if(target&&!target.startsWith('data:'))send('log',{level:'warn',message:'読み込み失敗 · '+(target.startsWith('blob:')?'ZIP内の'+e.target.localName:shorten(target,230))});}
       };
       addEventListener('error',onError,true);
-      addEventListener('unhandledrejection',e=>send('log',{level:'error',message:shorten(e.reason?.message??e.reason??'未処理のエラー')}));
+      addEventListener('unhandledrejection',e=>{send('lab-issue',{id:'js'});send('log',{level:'error',message:shorten(e.reason?.message??e.reason??'未処理のエラー')});});
       const storageFor=(type)=>{
         const map=new Map(Object.entries(storage?.[type]??{}));
         const save=()=>send('storage',{type,entries:[...map]});
@@ -386,7 +387,8 @@ function zipstageBootstrap(token, online, policy) {
           if(d?.set&&d.configurable)Object.defineProperty(ctor.prototype,attr,{...d,set(value){d.set.call(this,runtimeValue(this,attr,value));}});
         }
       }
-      if(typeof zipstageDev==='function')zipstageDev(send,token,{resolve,localPath,blobPaths,online,preblocked,route:'/'+(request||page)+(query||'')+(hash||'')});
+      const testRuntime=zipstageLabRuntime(send,{resolve,localPath,lab,routeFor:p=>files.has(p)||zipstageRoutes(p,files,rewrites)});
+      if(typeof zipstageDev==='function')zipstageDev(send,token,{resolve,localPath,blobPaths,online,preblocked,testRuntime,route:'/'+(request||page)+(query||'')+(hash||'')});
       const NativeAudio=window.Audio;
       if(NativeAudio) window.Audio=new Proxy(NativeAudio,{construct(Target,args){
         const audio=new Target();if(args.length)audio.src=args[0];return audio;

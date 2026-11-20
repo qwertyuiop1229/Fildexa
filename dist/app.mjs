@@ -5,6 +5,8 @@ import {createPicker} from './picker.mjs';
 import {toolDock} from './tool-dock.mjs';
 import {cancelMotion,rectOf,playFlip,enterContent,flashIcon,cornerToggle} from './motion.mjs';
 import {previewPolicy,previewSandbox} from './policy.mjs';
+import {createLab} from './lab.mjs';
+import {acceptsAsset,supported} from './lab-core.mjs';
 import {createLayout} from './layout.mjs';
 import {nativeControl,probeNative,createNative,stopNative,inspectCompatibility,parseHosted} from './native.mjs';
 
@@ -18,22 +20,37 @@ const bridge=(action,value)=>{
   frame.contentWindow.postMessage({zipstage:session.token,type:'dev',value:{action,value}},'*');return true;
 };
 const sourceFiles=()=>state.original??[];
+let lab,labSettings=null,testStorage={},watchResume=null;
+let pathCache={archive:null,project:null,rows:[]};
+const stagePaths=()=>{
+  const {archive,project}=state;if(!archive)return [];
+  if(pathCache.archive===archive&&pathCache.project===project)return pathCache.rows;
+  const rows=[];
+  for(const f of archive.files.keys()){
+    if(!project||f.startsWith(project.root))rows.push(f.slice(project?.root.length??0));
+    else if(/(?:^|\/)(?:README\.(?:md|markdown)|package\.json|tsconfig\.json|openapi\.(?:json|ya?ml))$/i.test(f))rows.push('/'+f);
+  }
+  pathCache={archive,project,rows:rows.filter(Boolean).sort((a,b)=>a.localeCompare(b,'ja'))};
+  return pathCache.rows;
+};
 let layout;
-const dock=toolDock($,bridge,{files:sourceFiles,storage:()=>state.storage,openStorage,reflow:resizeStage,panel:value=>layout?.panel(value),mountSplit:host=>layout?.mount(host),metadata:()=>({online:state.online,native:state.mode!=='isolated',phase:state.frame?'プレビュー中':'未起動',compiler:state.transformed.length,duration:state.startMs})});
+const dock=toolDock($,bridge,{files:sourceFiles,storage:()=>labSettings?testStorage:state.storage,openStorage,reflow:resizeStage,panel:value=>layout?.panel(value),mountSplit:host=>layout?.mount(host),openAsset:path=>lab.openAsset(path),metadata:()=>({online:state.online,native:state.mode!=='isolated',phase:state.frame?'プレビュー中':'未起動',compiler:state.transformed.length,duration:state.startMs})});
 const pickers={
   root:createPicker($('root-picker'),'root-label',i=>selectProject(Number(i))),
-  page:createPicker($('page-picker'),'page-label',page=>navigate({page}))
+  page:createPicker($('page-picker'),'page-label',page=>navigate({page})),
+  device:createPicker($('device-preset'),'device-label',v=>setView(v))
 };
 let runnerPromise;
 const readScript=async path=>{const r=await fetch(path);if(!r.ok)throw Error('プレビュー用のファイルを読み込めません。');return r.text();};
 function runnerCode(){
-  if(!runnerPromise)runnerPromise=Promise.all(['./vendor/lexer.js','./dev-bridge.js','./runner.js'].map(readScript)).then(s=>s.map(x=>x.replace(/<\/script/gi,'<\\/script')).join('\n')).catch(e=>{runnerPromise=null;throw e;});
+  if(!runnerPromise)runnerPromise=Promise.all(['./vendor/lexer.js','./dev-bridge.js','./lab-runtime.js','./runner.js'].map(readScript)).then(s=>s.map(x=>x.replace(/<\/script/gi,'<\\/script')).join('\n')).catch(e=>{runnerPromise=null;throw e;});
   return runnerPromise;
 }
 function message(text='',kind=''){
   const e=$('load-msg');e.hidden=!text;e.textContent=text;e.classList.toggle('error',kind==='error');
 }
 function phase(text='',kind=''){
+  state.phase=kind;lab?.refresh();
   $('phase').textContent=text;$('signal').className='signal'+(kind?' '+kind:'');
 }
 function loading(active,text='',percentage){
@@ -51,6 +68,7 @@ function empty(title,body){
   $('empty').hidden=false;$('empty-title').textContent=title;$('empty-copy').textContent=body;
 }
 function failure(e,context='ファイルを開けませんでした'){
+  lab?.closeAsset();
   const summary=String(e?.message??e??'読み込みに失敗しました。');
   dispose();loading(false);phase(context,'error');message(summary,'error');dock.log({level:'error',message:summary});
   empty(context,summary);$('focus-preview').disabled=true;$('close-project').disabled=false;
@@ -73,7 +91,7 @@ let compatAvailable=false,compatProbing=nativeControl(location);
 function syncCompat(loaded){
   const local=state.mode==='native',hosted=state.mode==='hosted',normal=local||hosted,ready=!!state.items;
   const sourceBuild=state.build&&state.project?.root===state.sourceRoot;
-  $('compat-inline').hidden=!loaded;$('mode-status').hidden=!loaded&&!normal;
+  $('settings').hidden=!loaded||!!state.assetOnly||normal;$('tools').hidden=!loaded||!!state.assetOnly||normal;$('compat-inline').hidden=!loaded||!!state.assetOnly;$('mode-status').hidden=!loaded&&!normal;
   $('mode-status').textContent=local?'ローカル':hosted?'テストURL':'隔離';
   $('compat-summary').textContent=state.report.length?state.report.map(item=>item.label).slice(0,3).join(' · ')+(state.report.length>3?' ほか':''):'実行環境を切り替えられます。';
   $('native-run').disabled=!ready||!compatAvailable||!!state.nativePending||normal||sourceBuild;
@@ -83,7 +101,7 @@ function syncCompat(loaded){
   if(state.native&&(!$('native-tab').getAttribute('href')||new URL($('native-tab').href).origin!==new URL(state.native.url).origin))$('native-tab').href=state.native.url;
   if(hosted)$('native-tab').href=state.hosted.url;
   if(!normal)$('native-tab').removeAttribute('href');
-  $('online').disabled=normal;$('persist').disabled=normal||!state.key||!saved;
+  $('online').disabled=normal;$('persist').disabled=normal||!!labSettings||!state.key||!saved;
   $('pointer-lock').disabled=normal||!ready;$('npm').disabled=normal;
   $('native-note').textContent=compatProbing?'PC版の起動を確認中…':!compatAvailable?'公開版では起動できません。配布ZIPを展開し、自分のPCで node server.mjs を実行してください。':state.nativePending?'ファイルをローカルで準備中…':sourceBuild?'ローカル互換モードはビルド済みの公開フォルダが必要です。ビルドしてから dist または公開フォルダを開いてください。':local?(state.native?.authLocal?'認証テスト用 localhost:4176。プレビュー内で止まる場合は別タブを使ってください。':'起動中。ログインや権限の確認は別タブも利用できます。'):'ファイルは自分のPC内だけで配信します。開発ツールのJS実行・通信記録は隔離モード用です。';
   const list=$('compat-findings');list.replaceChildren();
@@ -98,13 +116,16 @@ function openCompat(){
 $('open-compat').onclick=$('mode-status').onclick=openCompat;
 $('open-hosted').onclick=()=>{openCompat();$('hosted-url').focus({preventScroll:true});};
 $('hosted-form').onsubmit=e=>{
-  e.preventDefault();
+  e.preventDefault();openHosted($('hosted-url').value);
+};
+function openHosted(value){
   $('hosted-note').textContent='';
   try{
-    const parsed=parseHosted($('hosted-url').value,location.origin);
+    const parsed=parseHosted(value,location.origin);
+    lab.closeAsset();lab.stopWatch();$('test-indicator').hidden=true;labSettings=null;
     stopLocal();state.job++;state.gen++;dispose();state.mode='hosted';state.hosted={url:parsed.href};
     $('close-project').disabled=false;message();resetSettings();dock.close();dock.reset();
-    showLocalFrame();syncCompat(!!state.project);$('compat-dialog').close();
+    showLocalFrame();syncCompat(true);if($('compat-dialog').open)$('compat-dialog').close();
     $('project-announcement').textContent='テストURLを開きました。表示できないときは、テストURLボタンから別タブで開けます。';
   }catch(err){$('hosted-note').textContent=String(err.message??err);}
 };
@@ -115,7 +136,7 @@ $('native-run').onclick=async()=>{
   try{
     const r=await createNative(rows,{entry:state.history[state.index]?.page??project.home,rewrites:project.rewrites,spa:$('spa-fallback').checked||state.report.some(x=>x.id==='spa')});
     if(state.job!==job||state.project!==project||state.nativePending!==pending||state.gen!==gen){await stopNative(r.id);return;}
-    state.native=r;state.mode='native';dock.close();dock.reset();showLocalFrame();
+    lab.closeAsset();$('test-indicator').hidden=true;state.native=r;state.mode='native';dock.close();dock.reset();showLocalFrame();
   }catch(e){
     if(state.nativePending===pending){state.nativePending=null;syncCompat(true);$('native-note').textContent=String(e.message??e);}
   }finally{
@@ -125,7 +146,7 @@ $('native-run').onclick=async()=>{
 $('isolated-mode').onclick=()=>{
   if(state.mode==='isolated')return;
   if(!state.items){resetProject();$('compat-dialog').close();return;}
-  stopLocal();syncCompat(true);$('compat-dialog').close();void start();
+  stopLocal();syncCompat(true);$('test-indicator').hidden=!labSettings;$('compat-dialog').close();void start();
 };
 function showLocalFrame(page){
   const native=state.native??state.hosted;if(!native)return;
@@ -149,9 +170,10 @@ function resetGame(){
   state.game=false;$('pointer-lock').checked=false;$('pointer-lock').disabled=true;
 }
 function resetProject(){
+  lab.save();lab.stopWatch();lab.leave();pathCache={archive:null,project:null,rows:[]};labSettings=null;testStorage={};watchResume=null;$('test-indicator').hidden=true;$('project-assets').hidden=true;
   stopLocal();state.report=[];
   state.job++;state.gen++;dispose();
-  Object.assign(state,{archive:null,projects:[],project:null,items:null,original:null,packages:{},history:[],index:-1,name:'',size:0,transformed:[],compileErrors:[],build:false,sourceRoot:'',key:null,startMs:null});
+  Object.assign(state,{archive:null,projects:[],project:null,items:null,original:null,packages:{},history:[],index:-1,name:'',size:0,transformed:[],compileErrors:[],build:false,sourceRoot:'',key:null,startMs:null,assetOnly:false});
   resetSettings();resetGame();savedView();syncCompat(false);$('hosted-url').value='';$('hosted-note').textContent='';dock.close();dock.reset();
   setFocus('');setView('desktop');custom(900,640);switchSidebar(false);
   $('file').value='';$('folder').value='';
@@ -161,7 +183,7 @@ function resetProject(){
   for(const id of ['reload','back','forward','close-project','focus-preview'])$(id).disabled=true;
   $('path-label').textContent='ファイルを開いて開始';$('path-label').removeAttribute('title');
   $('view-label').removeAttribute('title');message();phase();loading(false);
-  empty('ZIPで開く、Webアプリ。','HTML・CSS・JavaScript・画像を、フォルダ構成のままプレビュー。');
+  empty('ZIPで開く、Webアプリ。','Webアプリは構成を保ったまま。資料や素材はその場で確認。');
   $('project-announcement').textContent='プレビューを閉じました。保存済みデータは保持されています。';
 }
 function urlState(item){return {...item,hash:item.hash||'',query:item.query||'',request:item.request??item.page};}
@@ -170,7 +192,7 @@ function updateRoute(){
   $('path-label').textContent=describePage(current);$('path-label').title=$('path-label').textContent;
   $('back').disabled=state.index<1;$('forward').disabled=state.index>=state.history.length-1;
   $('reload').disabled=!state.items;
-  pickers.page.value(current.page);
+  pickers.page.value(current.page);$('page-picker').parentElement.hidden=(state.project?.pages.length??0)<2;
   if(state.mode!=='isolated')$('back').disabled=$('forward').disabled=true;
 }
 function navigate(info,{keep=false}={}){
@@ -188,7 +210,7 @@ function savedView(){
   const id=state.key,snapshot=id?saved?.load(id):null;
   state.persist=!!snapshot?.enabled;
   state.storage=state.persist?{localStorage:safeStorage(Object.entries(snapshot.local??{}))}:{};
-  $('persist').checked=state.persist;$('persist').disabled=state.mode!=='isolated'||!id||!saved;
+  $('persist').checked=state.persist;$('persist').disabled=state.mode!=='isolated'||!!labSettings||!id||!saved;
 }
 function saveWorkspace(){
   if(!saved||!state.key)return;
@@ -202,21 +224,26 @@ function saveWorkspace(){
 }
 function selectProject(index){
   const project=state.projects[index];if(!project)return;
-  stopLocal();state.report=[];syncCompat(true);
+  lab.closeAsset();if(state.project&&!watchResume){lab.save();labSettings=null;$('test-indicator').hidden=true;}stopLocal();state.report=[];syncCompat(true);
   state.key=null;
   state.project=project;state.items=null;state.original=null;state.transformed=[];state.compileErrors=[];
-  state.history=[urlState({page:project.home})];state.index=0;
+  const remembered=watchResume?.route;
+  state.history=[urlState(remembered&&project.pages.includes(remembered.page)?remembered:{page:project.home})];state.index=0;
   savedView();
   pickers.page.set(project.pages.map(x=>({value:x,label:'/'+x})),project.home);
   $('project-detail').textContent=prettySize(state.size)+' · '+project.pages.length+' ページ';
   updateRoute();void prepare();
 }
-async function inspect(input,title,flavor){
+async function inspect(input,title,flavor,{watching=false,resume=null}={}){
+  lab.save();lab.leave();if(!watching)lab.stopWatch();watchResume=resume;
+  labSettings=resume?.lab??null;testStorage=resume?.testStorage??{};$('test-indicator').hidden=!labSettings;$('project-assets').hidden=true;state.assetOnly=false;
   stopLocal();state.report=[];state.items=null;syncCompat(false);$('hosted-note').textContent='';
-  const job=++state.job;state.gen++;dispose();dock.reset();resetSettings();resetGame();switchSidebar(false);
+  const job=++state.job;state.gen++;dispose();dock.reset();resetSettings();resetGame();
+  if(resume){state.online=resume.online;state.cdn=resume.cdn;$('online').checked=state.online;$('npm').checked=state.cdn;networkNote();state.game=resume.game;$('pointer-lock').checked=state.game;}
+  switchSidebar(false);
   $('close-project').disabled=false;$('project-announcement').textContent='';
   message();phase('解析中');empty('プロジェクトを確認中','HTMLと公開用フォルダを探しています。');loading(true,'ファイル構成を解析中');
-  state.name=title;state.items=null;state.original=null;state.key=null;state.startMs=null;state.project=null;state.packages={};savedView();
+  state.name=title;state.items=null;state.original=null;state.archive=null;state.key=null;state.startMs=null;state.project=null;state.packages={};state.compileErrors=[];savedView();
   $('project-info').hidden=true;$('selection').hidden=true;$('back').disabled=true;$('forward').disabled=true;$('reload').disabled=true;$('focus-preview').disabled=true;
   $('path-label').textContent='プロジェクトを確認中';
   try{
@@ -228,12 +255,25 @@ async function inspect(input,title,flavor){
     }else if(flavor==='html'){
       archive=normalizeEntries([{file:input,path:'index.html'}]);
       detected={candidates:[{root:'',kind:'単体HTML',home:'index.html',pages:['index.html'],rewrites:[]}],sourceRoot:''};
+    }else if(flavor==='asset'){
+      archive=normalizeEntries([{file:input,path:input.name}]);
+      detected={candidates:[],sourceRoot:''};
     }else{
       archive=normalizeEntries(input);detected=await scan(archive);
     }
     if(job!==state.job)return;
-    if(!detected.candidates.length)throw Error('HTMLが見つかりません。index.html がある公開フォルダか、ビルド済みの dist を選んでください。');
-    state.size=archive.size;state.archive=archive;state.projects=detected.candidates;state.build=!!detected.build;state.sourceRoot=detected.sourceRoot||'';
+    state.size=archive.size;state.archive=archive;
+    if(!detected.candidates.length){
+      const files=stagePaths(),first=files.find(p=>/^(?:.*\/)?readme\.(?:md|markdown)$/i.test(p))??files.find(acceptsAsset);
+      if(!first)throw Error('プレビューできるファイルがありません。ビルド済みフォルダか対応する素材を選んでください。');
+      state.assetOnly=true;state.projects=[];state.build=!!detected.build;$('project-info').hidden=false;$('project-assets').hidden=false;
+      $('project-name').textContent=title;$('project-detail').textContent=prettySize(state.size)+' · '+files.length+' ファイル';
+      loading(false);phase('ファイル閲覧','ready');$('path-label').textContent='ファイル閲覧';
+      empty('起動するページはありません','ファイルを確認するか、ビルド済みフォルダを開いてください。');
+      void lab.openAsset(first);syncCompat(false);$('project-announcement').textContent='ファイル閲覧を開きました。';
+      return;
+    }
+    $('project-assets').hidden=false;state.projects=detected.candidates;state.build=!!detected.build;state.sourceRoot=detected.sourceRoot||'';
     for(const name of new Set([state.sourceRoot+'package.json','package.json'])){
       if(!archive.files.has(name)||archive.files.get(name).length>128000)continue;
       try{
@@ -246,15 +286,17 @@ async function inspect(input,title,flavor){
     if(job!==state.job)return;
     $('project-name').textContent=title;$('project-name').title=title;$('project-info').hidden=false;$('selection').hidden=false;
     $('npm-option').hidden=!state.online||!Object.keys(state.packages).length;
-    pickers.root.set(state.projects.map((x,i)=>({value:String(i),label:(x.root.replace(/\/$/,'')||'/')+' · '+x.kind})),'0');
-    selectProject(0);
+    const retained=resume?state.projects.findIndex(x=>x.root===resume.root):-1, chosen=Math.max(0,retained);
+    pickers.root.set(state.projects.map((x,i)=>({value:String(i),label:(x.root.replace(/\/$/,'')||'/')+' · '+x.kind})),String(chosen));
+    $('root-picker').parentElement.hidden=state.projects.length<2;
+    selectProject(chosen);
   }catch(e){if(job===state.job)failure(e);}
 }
 function openSingle(file){
   if(!file)return;
-  const flavor=/\.zip$/i.test(file.name)?'zip':/\.html?$/i.test(file.name)?'html':'';
+  const flavor=/\.zip$/i.test(file.name)?'zip':/\.html?$/i.test(file.name)?'html':acceptsAsset(file.name)?'asset':'';
   if(flavor)void inspect(file,file.name,flavor);
-  else failure(Error('ZIP、HTML、またはフォルダを選んでください。'));
+  else failure(Error('ZIP、フォルダ、HTML、画像やCSVなどの対応ファイルを選んでください。'));
 }
 async function prepare(){
   const project=state.project,gen=++state.gen;
@@ -266,12 +308,18 @@ async function prepare(){
     state.original=items;
     void inspectCompatibility(items,()=>state.original!==items).then(rows=>{
       if(state.original!==items)return;
-      state.report=rows;syncCompat(true);
+      state.report=rows;syncCompat(true);lab.refresh();
     }).catch(()=>{});
     const signature=await appSignature(items,project.home);
     if(gen!==state.gen)return;
     state.key=projectKey(state.name,project.root,state.sourceRoot,project.kind,signature);
     savedView();
+    const prev=lab.project(state.key);if(prev&&!watchResume){
+      if(Array.isArray(prev.custom))custom(prev.custom[0],prev.custom[1]);
+      if(['desktop','mobile','custom','tablet','landscape'].includes(prev.mode))setView(prev.mode);
+      if(project.pages.includes(prev.page)&&typeof prev.query==='string'&&typeof prev.hash==='string'&&typeof prev.request==='string'){state.history=[urlState(prev)];state.index=0;updateRoute();}
+    }
+    if(watchResume?.storage)state.storage=watchResume.storage;
     const result=await compile(items,(i,n)=>{if(gen===state.gen){phase('変換中');loading(true,'TypeScript・JSX を変換中  '+i+' / '+n,Math.round(i/n*100));}},()=>gen!==state.gen);
     if(!result||gen!==state.gen)return;
     state.items=result.items;state.compileErrors=result.errors;$('pointer-lock').disabled=false;syncCompat(true);
@@ -288,7 +336,8 @@ async function start({keep=false}={}){
     return;
   }
   if(!state.items)return;
-  const gen=++state.gen,token=crypto.randomUUID(),location=state.history[state.index],online=state.online;
+  lab.closeAsset();lab.begin();
+  const gen=++state.gen,token=crypto.randomUUID(),online=state.online&&!labSettings?.offline;
   dispose();if(!keep&&!dock.keepAfterReload())dock.reset();else dock.invalidate();
   for(const e of state.compileErrors)dock.log({level:'error',message:e.path+' · '+e.message});
   state.launchAt=performance.now();state.startMs=null;
@@ -298,12 +347,12 @@ async function start({keep=false}={}){
     const frame=document.createElement('iframe');frame.title='Webアプリのプレビュー';frame.setAttribute('sandbox',previewSandbox(state.game));frame.referrerPolicy='no-referrer';
     const csp=previewPolicy(online);
     frame.srcdoc='<!doctype html><meta charset="UTF-8"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="'+csp+'"><script>'+raw+'\nzipstageBootstrap('+JSON.stringify(token)+','+online+','+JSON.stringify(csp)+');<\/script>';
-    state.frame=frame;state.session={token,gen,ready:false,done:false,watch:setTimeout(()=>{
+    state.frame=frame;state.session={token,gen,ready:false,done:false,scroll:watchResume?.scroll,watch:setTimeout(()=>{
       if(state.session?.token!==token||state.session.done)return;
       loading(false);$('empty').hidden=true;phase('応答待ち','error');
       dock.log({level:'warn',message:'プレビューの応答に時間がかかっています。読み込みログをご確認ください。'});dock.open('console');
     },23000)};
-    $('frame-wrap').replaceChildren(frame);$('frame-shell').hidden=false;measure();
+    watchResume=null;$('frame-wrap').replaceChildren(frame);$('frame-shell').hidden=false;measure();
   }catch(e){if(gen===state.gen)failure(e,'起動できませんでした');}
 }
 window.addEventListener('message',e=>{
@@ -313,19 +362,23 @@ window.addEventListener('message',e=>{
   if(type==='ready'&&!session.ready){
     session.ready=true;
     const route=state.history[state.index];
-    state.frame.contentWindow.postMessage({zipstage:session.token,type:'start',value:{items:state.items,...route,rewrites:state.project.rewrites,storage:state.storage,packages:state.packages,cdn:state.online&&state.cdn,transformed:state.transformed}},'*');
+    state.frame.contentWindow.postMessage({zipstage:session.token,type:'start',value:{items:state.items,...route,rewrites:state.project.rewrites,storage:labSettings?testStorage:state.storage,packages:state.packages,cdn:state.online&&state.cdn,transformed:state.transformed,lab:labSettings,scroll:session.scroll}},'*');
   }else if(type==='rendered'&&!session.done){
     session.done=true;clearTimeout(session.watch);
     state.startMs=Math.round(performance.now()-state.launchAt);loading(false);$('empty').hidden=true;
-    phase('実行中','ready');$('focus-preview').disabled=false;dock.ready();measure();enterContent($('frame-shell'),{duration:170,y:2});
+    phase('実行中','ready');lab.save();$('focus-preview').disabled=false;dock.ready();measure();enterContent($('frame-shell'),{duration:170,y:2});
   }else if(type==='fatal'&&!session.done){
     failure(value,'表示できませんでした');dock.open('console');
   }else if(type==='navigate'&&state.project?.pages.includes(value?.page)&&typeof value.hash==='string'){
     navigate({page:value.page,hash:value.hash.slice(0,700),query:typeof value.query==='string'?value.query.slice(0,700):'',request:typeof value.request==='string'?value.request.slice(0,1200):value.page},{keep:true});
   }else if(type==='storage'&&['localStorage','sessionStorage'].includes(value?.type)){
-    state.storage[value.type]=safeStorage(value.entries);
-    if(value.type==='localStorage'&&state.persist)saveWorkspace();
+    (labSettings?testStorage:state.storage)[value.type]=safeStorage(value.entries);
+    if(!labSettings&&value.type==='localStorage'&&state.persist)saveWorkspace();
     dock.storage();
+  }else if(type==='lab-scroll'){
+    state.watchScroll?.(Number.isFinite(value)?value:0);
+  }else if(typeof type==='string'&&type.startsWith('lab-')){
+    lab.receive(type,value);
   }else{
     dock.receive(type,value,session.token);
   }
@@ -353,7 +406,7 @@ window.addEventListener('drop',async e=>{
     const data=e.dataTransfer;
     const entries=await listDrop(data);if(job!==state.job||!entries.length)return;
     const file=entries[0].file;
-    if(entries.length===1&&entries[0].path===file.name&&/\.(zip|html?)$/i.test(file.name))openSingle(file);
+    if(entries.length===1&&entries[0].path===file.name&&(/\.zip$/i.test(file.name)||acceptsAsset(file.name)))openSingle(file);
     else void inspect(entries,entries[0].path.includes('/')?entries[0].path.split('/')[0]:'選択したファイル','folder');
   }catch(e){if(job===state.job)failure(e);}
 });
@@ -412,18 +465,20 @@ window.addEventListener('keydown',e=>{
 function measure(){
   const shell=$('frame-shell'),screen=$('screen');
   if(state.view==='desktop'){shell.classList.remove('fixed');$('view-label').textContent='PC';return;}
-  const [w,h]=state.view==='mobile'?[390,844]:state.custom;
+  const [w,h]=presets[state.view]??state.custom;
   const fit=fitViewport(w,h,screen.clientWidth,screen.clientHeight);
   state.ratio=fit.ratio;
   shell.classList.add('fixed');
   for(const [key,value] of Object.entries({'scaled-w':fit.w+'px','scaled-h':fit.h+'px','real-w':w+'px','real-h':h+'px',fit:fit.ratio}))shell.style.setProperty('--'+key,value);
   $('view-label').textContent=w+' × '+h;$('view-label').title=w+' × '+h+' px';
 }
+const presets={mobile:[390,844],tablet:[820,1180],landscape:[1180,820]};
 function setView(value){
   const before=rectOf(frameShell);cancelMotion(frameShell);
   state.view=value;$('sizebar').hidden=value!=='custom';$('resize-handle').hidden=value!=='custom';
-  for(const v of ['desktop','mobile','custom']){$(v).classList.toggle('on',v===value);$(v).setAttribute('aria-pressed',String(v===value));}
-  measure();playFlip(frameShell,before,240);
+  for(const v of ['desktop','mobile','custom']){$(v).classList.toggle('on',v===value||v==='mobile'&&!!presets[value]);$(v).setAttribute('aria-pressed',String(v===value||v==='mobile'&&!!presets[value]));}
+  $('viewport-more').hidden=value==='desktop';pickers.device.value(state.view);
+  measure();playFlip(frameShell,before,240);lab?.save();
 }
 for(const v of ['desktop','mobile','custom'])$(v).onclick=()=>setView(v);
 if(window.ResizeObserver)new ResizeObserver(()=>measure()).observe($('screen'));
@@ -434,7 +489,7 @@ function custom(w,h,animate=false){
   if(Number.isFinite(w))state.custom[0]=clamp(w,240,3840);
   if(Number.isFinite(h))state.custom[1]=clamp(h,200,2160);
   $('width').value=state.custom[0];$('height').value=state.custom[1];measure();
-  if(animate)playFlip(frameShell,before,195);
+  if(animate)playFlip(frameShell,before,195);lab?.save();
 }
 for(const name of ['width','height']){
   $(name).addEventListener('change',()=>custom($('width').valueAsNumber,$('height').valueAsNumber,true));
@@ -443,7 +498,7 @@ for(const name of ['width','height']){
 let drag, dragFrame=0, dragPoint;
 const handle=$('resize-handle');
 handle.onpointerdown=e=>{
-  if(e.button!==0)return;e.preventDefault();
+  if(e.button!==0||!e.isPrimary)return;e.preventDefault();
   cancelMotion(frameShell);
   drag={id:e.pointerId,x:e.clientX,y:e.clientY,dims:[...state.custom],ratio:state.ratio||1};
   handle.setPointerCapture(e.pointerId);
@@ -459,7 +514,7 @@ handle.onpointermove=e=>{
   dragPoint=[e.clientX,e.clientY];
   if(!dragFrame)dragFrame=requestAnimationFrame(dragResize);
 };
-handle.onlostpointercapture=handle.onpointerup=handle.onpointercancel=()=>{if(dragFrame)cancelAnimationFrame(dragFrame);dragResize();drag=null;dragPoint=null;};
+handle.onlostpointercapture=handle.onpointerup=handle.onpointercancel=e=>{if(e.pointerId!==drag?.id)return;if(dragFrame)cancelAnimationFrame(dragFrame);dragResize();drag=null;dragPoint=null;};
 handle.onkeydown=e=>{
   const delta={ArrowLeft:[-10,0],ArrowRight:[10,0],ArrowUp:[0,-10],ArrowDown:[0,10]}[e.key];
   if(delta){e.preventDefault();custom(state.custom[0]+delta[0],state.custom[1]+delta[1]);}
@@ -514,6 +569,41 @@ $('erase-dialog').onclose=()=>{
   }
   erase=null;refreshSaved();dock.storage();
 };
-networkNote();setView('desktop');$('focus-preview').disabled=true;
+lab=createLab($,{
+  read:path=>state.archive.blob(path.startsWith('/')?path.slice(1):(state.project?.root??'')+path),
+  paths:stagePaths,
+  token:()=>state.archive,
+  asset:active=>{
+    $('asset-stage').hidden=!active;
+    $('screen').classList.toggle('show-asset',active);
+    if(active)$('empty').hidden=true;
+    else if(!state.frame)$('empty').hidden=false;
+    $('focus-preview').disabled=active||(!state.frame&&state.mode==='isolated');
+  },
+  state:()=>({phase:state.phase,report:state.report,compileErrors:state.compileErrors??[],hosted:state.hosted?.url,duration:state.startMs,route:state.history[state.index]?describePage(state.history[state.index]):state.hosted?.url??''}),
+  view:()=>({mode:state.view,custom:[...state.custom],...state.history[state.index]}),
+  viewport:()=>state.view==='desktop'?[$('frame-wrap').clientWidth||$('screen').clientWidth,$('frame-wrap').clientHeight||$('screen').clientHeight]:presets[state.view]??state.custom,
+  snapshot:()=>state.items&&state.mode==='isolated'&&state.history[state.index]?{name:state.name,items:state.items,transformed:state.transformed,home:state.project.home,pages:state.project.pages,rewrites:state.project.rewrites,route:state.history[state.index],fileSizes:state.original.map(([p,f])=>[p,f.size])}:null,
+  bridge,runner:runnerCode,ready:()=>!!state.session?.done,
+  dock:dock.open,compat:openCompat,folder:()=>$('choose-folder').click(),
+  network:dock.reportNetwork,hosted:openHosted,notice:message,
+  apply:opt=>{if(state.mode!=='isolated'||!state.items)return;if(!labSettings||!opt)testStorage={};labSettings=opt;syncCompat(true);$('test-indicator').hidden=!opt;void start();},
+  watch:async(rows,name,first)=>{
+    const job=state.job;
+    const scroll=first?0:await new Promise(resolve=>{
+      const end=value=>{clearTimeout(timer);if(state.watchScroll===end)state.watchScroll=null;resolve(value);};
+      const timer=setTimeout(()=>end(0),320);state.watchScroll=end;if(!bridge('lab-scroll'))end(0);
+    });
+    if(state.job!==job)return;
+    const resume=!first&&state.project?{root:state.project.root,route:state.history[state.index],storage:state.storage,testStorage,scroll,lab:labSettings,online:state.online,cdn:state.cdn,game:state.game}:null;
+    await inspect(rows,name,'folder',{watching:true,resume});
+  }
+});
+$('file').accept=supported;
+$('open-lab').onclick=()=>lab.selection('diagnosis');
+$('project-assets').onclick=()=>lab.selection('files');
+$('test-indicator').onclick=()=>lab.selection('test');
+pickers.device.set([['mobile','スマホ・縦'],['tablet','タブレット・縦'],['landscape','タブレット・横'],['custom','カスタム']].map(([value,label])=>({value,label})),'mobile');
+syncCompat(false);networkNote();setView('desktop');$('focus-preview').disabled=true;
 layout=createLayout($,dock,resizeStage,measure,()=>{cancelMotion(frameShell);cancelMotion(viewPanel);});
 if(compatProbing)void probeNative(AbortSignal.timeout?.(5000)).then(found=>{compatAvailable=!!found;compatProbing=false;syncCompat(!!state.project);});

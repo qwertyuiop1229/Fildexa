@@ -26,9 +26,10 @@ export async function scan(archive) {
       }
     }catch{}
   }
-  for(const name of ['dist','build','out','public','dist/client','www']){
-    const dir=stripped+name+'/';
-    if(files.includes(dir+'index.html'))add(dir,'公開フォルダ',name==='dist'?90:80);
+  for(const name of ['dist','build','out','public','dist/client','www','.output/public','_site','site','export']){
+    const suffix=name+'/';
+    const roots=new Set([stripped+suffix,...files.filter(p=>p.endsWith('/'+suffix+'index.html')).slice(0,35).map(p=>p.slice(0,-'index.html'.length))]);
+    for(const dir of roots)if(files.includes(dir+'index.html'))add(dir,'公開フォルダ',name==='dist'?90:80);
   }
   const moduleRoots=files.filter(f=>/(^|\/)package\.json$/.test(f) && archive.files.get(f)?.length<2**20);
   let build=false;

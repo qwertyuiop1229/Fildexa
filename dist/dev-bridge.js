@@ -1,4 +1,4 @@
-function zipstageDev(send, token, {resolve, localPath, blobPaths, online, preblocked, route}) {
+function zipstageDev(send, token, {resolve, localPath, blobPaths, online, preblocked, route, testRuntime}) {
   let serial=0, active=0, picked=null, overlay=null, nextNode=0;
   const nodes=new Map(), ids=new WeakMap(), initialInline=new WeakMap();
   const n = value => Number.isFinite(value)?Math.max(0,Math.round(value)):null;
@@ -21,6 +21,8 @@ function zipstageDev(send, token, {resolve, localPath, blobPaths, online, preblo
     const item={id:details.id??serial,type,url:cleanURL(url),t:n(now()),...details};
     if(!item.url)return;
     send('network',item);
+    if(item.phase==='blocked')send('lab-issue',{id:'csp'});
+    else if(item.phase==='failed')send('lab-issue',{id:'request'});
     return item.id;
   }
   function representation(v){
@@ -75,7 +77,7 @@ function zipstageDev(send, token, {resolve, localPath, blobPaths, online, preblo
     const t=now(),id=network('fetch',raw,{method,phase:'pending',sent:headers(opts?.headers??input?.headers)});
     try{
       const response=await baseFetch.call(this,input,opts);
-      network('fetch',raw,{id,method,phase:response.ok||response.type==='opaque'?'complete':'failed',ms:n(now()-t),status:response.status||null,final:response.redirected?cleanURL(response.url):null,contentType:response.headers.get('content-type'),bytes:Number(response.headers.get('content-length'))||null,received:headers(response.headers)});
+      network('fetch',raw,{id,method,phase:response.ok||response.type==='opaque'?'complete':'failed',ms:n(now()-t),status:response.status||null,final:response.redirected?cleanURL(response.url):null,contentType:response.headers.get('content-type'),mock:response.headers.get('x-zipstage-mock')==='1',bytes:Number(response.headers.get('content-length'))||null,received:headers(response.headers)});
       return response;
     }catch(e){network('fetch',raw,{id,method,phase:'failed',ms:n(now()-t),error:short(e?.message,240)});throw e;}
   };
@@ -224,6 +226,10 @@ function zipstageDev(send, token, {resolve, localPath, blobPaths, online, preblo
       else document.documentElement.style.removeProperty('cursor');
     }
     else if(action==='metrics')previewMetrics();
+    else if(action==='lab-audit')send('lab-audit',testRuntime.audit());
+    else if(action==='lab-check'&&typeof value?.selector==='string'&&value.selector.length<=240&&Number.isInteger(value.id))send('lab-check',{id:value.id,pass:testRuntime.check(value.selector)});
+    else if(action==='lab-frames')testRuntime.performance(result=>send('lab-frames',result));
+    else if(action==='lab-scroll')send('lab-scroll',Math.round(window.scrollY));
     else if(action==='command'&&typeof value==='string'&&value.length<=4000){
       try{const result=await (0,eval)(value);send('log',{level:'result',message:representation(result)});}
       catch(e){send('log',{level:'error',message:representation(e)});}

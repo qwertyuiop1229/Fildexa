@@ -13,7 +13,7 @@ export function clean(name) {
   name = name.replaceAll('\\','/');
   if(name.startsWith('/') || /^[a-z]:/i.test(name) || /[\u0000-\u001f\u007f]/.test(name) || name.split('/').includes('..')) return null;
   const path=name.split('/').filter(x=>x && x!=='.').join('/');
-  if(!path || path.length>1500 || path.split('/').some(x=>/^\.|^__MACOSX$|^node_modules$/i.test(x))) return null;
+  if(!path || path.length>1500 || path.split('/').some(x=>x!=='.output'&&/^\.|^__MACOSX$|^node_modules$/i.test(x))) return null;
   if(/(?:^|\/)(?:[^/]*service[-_]?account[^/]*\.json|client_secret[^/]*\.json|credentials[^/]*\.json|id_(rsa|ed25519|ecdsa)|[^/]+\.(?:pem|key|p8|p12|pfx|jwk|jks|keystore))$/i.test(path)) return null;
   return path;
 }

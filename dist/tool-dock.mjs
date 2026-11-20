@@ -1,3 +1,4 @@
+import {acceptsAsset} from './lab-core.mjs';
 import {prettySize} from './workspace.mjs';
 import {createPicker} from './picker.mjs';
 import {enterContent} from './motion.mjs';
@@ -162,7 +163,7 @@ export function toolDock($,bridge,ctx){
     for(const prop of ['type','url','phase','method','error','contentType','mime','protocol','final'])if(typeof item[prop]==='string')allowed[prop]=short(item[prop],prop==='url'||prop==='final'?1600:250);
     for(const prop of ['status','bytes','ms','t','upload','download'])if(Number.isFinite(item[prop]))allowed[prop]=item[prop];
     for(const prop of ['sent','received'])if(Array.isArray(item[prop]))allowed[prop]=item[prop].slice(0,16).filter(x=>Array.isArray(x)&&x.length===2).map(([k,v])=>[short(k,70),short(v,360)]);
-    net.set(key,{...prev,...allowed,key});
+    if(item.mock===true)allowed.mock=true;net.set(key,{...prev,...allowed,key});
     if(net.size>550)net.delete(net.keys().next().value);
     update();
   }
@@ -175,7 +176,7 @@ export function toolDock($,bridge,ctx){
       const li=create('li'),b=action('',()=>{selectedNet=item.key;netMessage='';renderNet();},'net-row');
       const p=item.status?String(item.status):phaseLabel[item.phase]??item.phase??'';
       b.title=item.url;b.setAttribute('aria-current',String(selectedNet===item.key));
-      b.append(create('span',p,'tag '+(item.phase==='blocked'?'blocked':item.phase==='failed'?'failed':item.phase==='complete'?'ok':'')),create('span',hostName(item.url)||item.url,'net-host'),create('span',item.type??''));
+      b.append(create('span',p,'tag '+(item.phase==='blocked'?'blocked':item.phase==='failed'?'failed':item.phase==='complete'?'ok':'')),create('span',hostName(item.url)||item.url,'net-host'),create('span',item.mock?'モック':item.type??''));
       li.append(b);list.append(li);
     }
     replace(view.list,note(rows.length+'件 · '+(ctx.metadata().online?'外部通信オン':'外部通信オフ')),list);view.list.scrollTop=old;
@@ -183,7 +184,7 @@ export function toolDock($,bridge,ctx){
     if(!item){replace(view.details,note('通信を選ぶと詳細を確認できます。IPはDNSの候補のみ確認可能です。'));return;}
     const scroll=view.details.scrollTop, host=hostName(item.url), opened=new Set([...view.details.querySelectorAll('details[open] > summary')].map(x=>x.textContent));
     const details=[
-      ['通信先',item.url],['ドメイン',host],['種類',item.type],['メソッド',item.method],
+      ['通信先',item.url],['ドメイン',host],['種類',item.mock?'モック応答':item.type],['メソッド',item.method],
       ['状態',(phaseLabel[item.phase]??item.phase??'')+(item.status?' · '+item.status:'')],
       ['時間',item.ms==null?null:item.ms+' ms'],['サイズ',item.bytes==null?null:prettySize(item.bytes)],['HTTP',item.protocol],
       ['Content-Type',item.contentType||item.mime],['リダイレクト先',item.final],['WebSocket送信／受信',item.upload==null?null:item.upload+' / '+(item.download??0)],['補足',item.error]
@@ -224,7 +225,8 @@ export function toolDock($,bridge,ctx){
     const blob=ctx.files().find(([p])=>p===path)?.[1];
     if(!blob){replace(view.details,note('ファイルは現在のフォルダにありません。'));return;}
     const textual=/^(text\/|application\/(?:json|xml|manifest))/.test(blob.type)||/\.(tsx?|jsx|mts|cts|vue|svelte|md|svg)$/i.test(path);
-    if(!textual){view.sourceText='';replace(view.details,note(path+' · '+prettySize(blob.size)),note('バイナリファイルです。'));return;}
+    const rich=()=>acceptsAsset(path)?[action('プレビューを開く',()=>ctx.openAsset(path))]:[];
+    if(!textual){view.sourceText='';replace(view.details,note(path+' · '+prettySize(blob.size)),...rich());return;}
     view.sourceText='';replace(view.details,note('データを読み込み中…'));
     try{
       const txt=await blob.slice(0,240000).text();
@@ -237,7 +239,7 @@ export function toolDock($,bridge,ctx){
         line.dataset.line=String(i+1);fragment.append(line);
       }
       code.append(fragment);
-      replace(view.details,note(path+' · '+prettySize(blob.size)+(blob.size>240000||raw.length>3000?' · 表示範囲を制限':'')),code);
+      replace(view.details,note(path+' · '+prettySize(blob.size)+(blob.size>240000||raw.length>3000?' · 表示範囲を制限':'')),...rich(),code);
     }catch{if(ver===fileVersion&&scope===panelVersion)replace(view.details,note('ファイルを表示できませんでした。'));}
   }
   function renderMetrics(){
@@ -299,7 +301,7 @@ export function toolDock($,bridge,ctx){
       if(next!==undefined){e.preventDefault();buttons[next].focus();open(buttons[next].dataset.key);}
     };
   }
-  return {log,receive,invalidate,reset,open,close:()=>{if(isOpen)close();},show:()=>open(),ready,keepAfterReload:()=>keepAfterReload,storage:()=>{if(tab==='application')update();}};
+  return {log,receive,invalidate,reset,open,reportNetwork:()=>[...net.values()],close:()=>{if(isOpen)close();},show:()=>open(),ready,keepAfterReload:()=>keepAfterReload,storage:()=>{if(tab==='application')update();}};
 }
 async function dns(host){
   if(!/^(?:[a-z\d-]+\.)*[a-z\d-]+$/i.test(host)&&!host.includes(':'))return [];

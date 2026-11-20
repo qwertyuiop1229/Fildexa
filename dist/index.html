@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
-  <meta name="description" content="ZIPにまとめたWebアプリをブラウザだけでプレビュー。">
-  <title>ZipStage — ZIPでWebプレビュー</title>
+  <meta name="description" content="ZIPやフォルダを開いて、Webアプリと素材をプレビュー・比較・テスト。">
+  <title>ZipStage — Webプレビューとテスト</title>
   <link rel="apple-touch-icon" href="./icons/icon-180.png">
   <link rel="manifest" href="./manifest.webmanifest">
   <meta name="theme-color" content="#087968">
@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="./layout.css">
   <script type="module" src="./app.mjs"></script>
   <link rel="stylesheet" href="./compat.css">
+  <link rel="stylesheet" href="./lab.css">
 </head>
 <body>
   <svg class="defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -48,6 +49,7 @@
     <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><path d="M9 4v4m5 2v4m-5 2v4"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4 4"/></symbol>
     <symbol id="i-drag" viewBox="0 0 24 24"><path d="m6 18 12-12M12 18l6-6m-1 6h1v-1"/></symbol>
+    <symbol id="i-lab" viewBox="0 0 24 24"><path d="M10 4h4m-3 0v6l-5.1 7.9A1.4 1.4 0 0 0 7 20h10a1.4 1.4 0 0 0 1.1-2.1L13 10V4m-5 11h8"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
   </defs></svg>
   <header class="topbar"><div class="top-in">
@@ -55,6 +57,7 @@
     <span class="brand-caption">WEB PROJECT STUDIO</span>
     <div class="top-right"><span class="private-tag"><svg><use href="#i-lock"/></svg>ブラウザ内で処理</span>
       <button class="icon-btn chrome-btn" id="theme" type="button" aria-label="ダークモードに切り替え" title="テーマ切り替え"><svg><use id="theme-icon" href="#i-moon"/></svg></button>
+      <button class="btn lab-trigger" id="open-lab" type="button"><svg aria-hidden="true"><use href="#i-lab"/></svg>検証ラボ</button>
       <button class="btn help-button" id="open-help" type="button"><svg><use href="#i-help"/></svg>使い方</button>
     </div>
   </div></header>
@@ -63,9 +66,9 @@
     <aside class="sidebar" id="sidebar" aria-label="プロジェクト設定">
       <div class="sidebar-head"><span><svg><use href="#i-layer"/></svg> ワークスペース</span><button class="icon-btn chrome-btn compact-close" id="close-sidebar" type="button" aria-label="プロジェクト設定を閉じる"><svg><use href="#i-close"/></svg></button></div>
       <section class="side-block">
-        <input id="file" type="file" accept=".zip,.html,.htm,application/zip,text/html" hidden>
+        <input id="file" type="file" hidden>
         <input id="folder" type="file" webkitdirectory multiple hidden>
-        <button class="drop" id="drop" type="button"><span class="upload-icon"><svg><use href="#i-upload"/></svg></span><strong>ここにドロップ</strong><span class="drop-caption">ZIP・フォルダ・HTML</span></button>
+        <button class="drop" id="drop" type="button"><span class="upload-icon"><svg><use href="#i-upload"/></svg></span><strong>ここにドロップ</strong><span class="drop-caption">ZIP・フォルダ・素材</span></button>
         <div class="upload-actions">
           <button class="btn" id="choose-file" type="button"><svg><use href="#i-zip"/></svg>ファイル</button>
           <button class="btn" id="choose-folder" type="button"><svg><use href="#i-folder"/></svg>フォルダ</button>
@@ -76,9 +79,10 @@
           <button id="open-compat" class="btn" type="button"><svg><use href="#i-settings"/></svg><span>動作モード・互換性</span></button>
           <p id="compat-summary" class="quiet" aria-live="polite"></p>
         </div>
+        <button id="project-assets" class="btn" hidden type="button"><svg aria-hidden="true"><use href="#i-file"/></svg>ファイルを見る</button>
         <p id="load-msg" role="status" class="message" hidden></p>
       </section>
-      <section id="settings" class="side-block settings">
+      <section id="settings" class="side-block settings" hidden>
         <h2><svg><use href="#i-settings"/></svg> プレビュー設定</h2>
         <div id="selection" class="selection" hidden>
           <div class="field"><label id="root-label">公開フォルダ</label><div id="root-picker"></div></div>
@@ -88,7 +92,7 @@
         <p class="quiet" id="online-description">初期状態ではオフ。</p>
         <div class="switch-row" id="npm-option" hidden><label for="npm">npm依存をCDNから</label><input type="checkbox" id="npm" role="switch"></div>
         <div class="switch-row"><label for="pointer-lock">ゲーム操作</label><input type="checkbox" id="pointer-lock" role="switch" aria-describedby="pointer-description" disabled></div>
-        <p class="quiet" id="pointer-description">対応ブラウザでマウスを捕捉できます。解除は Esc。切り替えると再読み込みします。</p>
+        <p class="quiet" id="pointer-description">対応するゲームでマウスの移動を受け取ります。解除は Esc。</p>
         <div class="switch-row"><label for="persist">アプリのデータを保存</label><input type="checkbox" id="persist" role="switch" disabled></div>
         <p class="quiet">localStorageのみ。アプリごとに分離。</p>
         <button class="btn storage-button" id="open-storage" type="button"><svg><use href="#i-layer"/></svg>保存データを管理</button>
@@ -102,7 +106,7 @@
       <header class="preview-head">
         <div class="preview-heading">
           <button class="icon-btn chrome-btn compact-menu" id="open-sidebar" type="button" aria-label="プロジェクトを開く" aria-controls="sidebar" aria-expanded="false"><svg><use href="#i-folder"/></svg></button>
-          <span id="signal" class="signal" aria-hidden="true"></span><h2>プレビュー</h2><span id="phase" aria-live="polite"></span>
+          <span id="signal" class="signal" aria-hidden="true"></span><h2>プレビュー</h2><span id="phase" aria-live="polite"></span><button id="test-indicator" class="btn lab-indicator" hidden type="button" aria-label="テスト条件を確認">テスト中</button>
         </div>
         <div class="preview-actions">
           <div class="seg" role="group" aria-label="画面サイズ">
@@ -123,6 +127,7 @@
         <div class="address"><svg><use href="#i-lock"/></svg><span id="path-label">ファイルを開いて開始</span><button class="mode-chip" id="mode-status" type="button" hidden>隔離</button></div>
         <span class="screen-label" id="view-label">PC</span>
       </div>
+      <div id="viewport-more" class="viewport-more" hidden><span id="device-label">画面のプリセット</span><div id="device-preset"></div></div>
       <div class="sizebar" id="sizebar" hidden>
         <span class="size-copy">カスタム</span><label for="width"><span>幅</span> <input type="number" inputmode="numeric" min="240" max="3840" id="width" value="900"></label>
         <span aria-hidden="true">×</span><label for="height"><span>高さ</span> <input type="number" inputmode="numeric" min="200" max="2160" id="height" value="640"></label><span class="size-copy">px · 右下をドラッグ</span>
@@ -132,11 +137,12 @@
           <div class="empty-art" aria-hidden="true"><span class="art-back"></span><span class="art-front"><svg><use href="#i-code"/></svg></span><span class="art-zip"><svg><use href="#i-zip"/></svg></span></div>
           <p class="eyebrow">WEB PROJECT PREVIEW</p>
           <strong id="empty-title">ZIPで開く、Webアプリ。</strong>
-          <p id="empty-copy">HTML・CSS・JavaScript・画像を、フォルダ構成のままプレビュー。</p>
+          <p id="empty-copy">Webアプリは構成を保ったまま。資料や素材はその場で確認。</p>
           <div id="loading" class="loading" hidden><progress id="progress" max="100" aria-label="読み込み状況"></progress><span id="loading-step" role="status"></span></div>
-          <div class="formats" id="formats"><span>ZIP</span><span>フォルダ</span><span>HTML</span></div>
+          <div class="formats" id="formats"><span>ZIP</span><span>フォルダ</span><span>HTML</span><span>素材</span></div>
           <button class="btn empty-open compact-menu" id="empty-open" type="button"><svg><use href="#i-folder"/></svg>ファイル・フォルダを開く</button>
         </div>
+        <section id="asset-stage" class="asset-stage" aria-label="ファイルプレビュー" hidden></section>
         <div id="frame-shell" class="frame-shell" hidden><div id="frame-wrap" class="frame-wrap"></div><button class="resize-handle" id="resize-handle" type="button" aria-label="ビューポートのサイズ調整" title="ドラッグでサイズ変更" hidden><svg><use href="#i-drag"/></svg></button></div>
       </div>
       <button type="button" class="focus-exit" id="exit-focus" aria-label="右上の縮小ボタンを表示" hidden><span><svg><use href="#i-min"/></svg></span></button>
@@ -160,14 +166,20 @@
       </section>
     </section>
   </main>
+  <dialog id="lab-dialog" class="lab-dialog" aria-labelledby="lab-title">
+    <div class="dialog-head"><div><span class="lab-kicker">ZIPSTAGE / WORKSPACE</span><h2 id="lab-title"><svg aria-hidden="true"><use href="#i-lab"/></svg> 検証ラボ</h2></div><form method="dialog"><button class="btn">閉じる</button></form></div>
+    <div id="lab-tabs" class="lab-tabs" role="tablist" aria-label="検証ラボの機能"></div>
+    <div id="lab-body" class="lab-body" role="tabpanel" tabindex="0"></div>
+  </dialog>
   <dialog id="help-dialog" aria-labelledby="help-title">
     <div class="dialog-head"><h2 id="help-title">ZipStageの使い方</h2><form method="dialog"><button class="btn">閉じる</button></form></div>
     <div class="dialog-body">
       <ol class="instructions">
         <li><strong>ZIP・フォルダ・HTMLを開く</strong><p>CSSや画像も使うときは、まとめてZIPかフォルダで開いてください。Firebase Hostingの設定があれば公開用フォルダを自動で選びます。</p></li>
-        <li><strong>画面サイズを変えて試す</strong><p>PC・スマホ・カスタムから選べます。カスタムでは幅と高さを入力するか、角のハンドルをドラッグできます。プレビューだけに拡大すると、右上の縮小アイコンが約1秒だけ表示されます。消えたら同じ角をタップして表示し、もう一度タップで戻れます。</p></li>
+        <li><strong>画面サイズを変えて試す</strong><p>PC・スマホ・タブレット・カスタムから選べます。カスタムでは幅と高さを入力するか、角のハンドルをドラッグできます。プレビューだけに拡大すると、右上の縮小アイコンが約1秒だけ表示されます。消えたら同じ角をタップして表示し、もう一度タップで戻れます。</p></li>
         <li><strong>開発ツールで調べる</strong><p>コンソール、要素検索、通信、ファイル、性能、ストレージをプレビューと並べて見られます。境界の細い線をドラッグすると広さを変えられます。幅が広い画面では、開発ツールを右にも配置できます。</p></li>
       </ol>
+      <div class="lab-flow help-flow"><div><strong>開く</strong><p>ZIP・フォルダ・素材</p></div><div><strong>見る</strong><p>プレビュー・開発ツール</p></div><div><strong>確かめる</strong><p>検証ラボで診断・比較</p></div></div>
       <div class="help-note compatibility"><strong>外部通信オンと本番公開は別です</strong><p>HTTPS・WSSの通信を試せますが、相手のCORSやログイン設定は変わりません。本番のURLと同じにはならず、Googleログイン、PWAのインストール、IndexedDB、サーバー処理などは「動作モード・互換性」で確認方法を案内します。</p><p>ログインや保存まで確認する場合は、公開用のファイルをローカルサーバーか専用のテスト用ホスティングで開いてください。Firebaseの本番データに接続したくない場合は、エミュレーターか別のテスト用プロジェクトを使います。</p></div>
       <div class="help-note"><strong>ビルドが必要なアプリは</strong><p>TypeScript・JSX・基本的なVite構成をブラウザで簡易変換できます。独自のViteプラグインやサーバー処理があるアプリは、先にビルドして <code>dist</code> などを開いてください。FirebaseログインやPWAインストール、IndexedDBはこのプレビューでは使えません。</p></div>
     </div>

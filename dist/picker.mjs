@@ -47,7 +47,9 @@ export function createPicker(host,labelId,onChange){
   }
   function open(){
     if(!values.length)return;
-    globalClose?.();globalClose=close;position();
+    globalClose?.();globalClose=close;
+    const portal=host.closest('dialog')??document.body;if(menu.parentNode!==portal)portal.append(menu);
+    position();
     // Keep the list in the layout between opens so both directions can fade.
     menu.hidden=false;menu.getBoundingClientRect();
     shown=true;menu.dataset.open='true';menu.inert=false;menu.setAttribute('aria-hidden','false');button.setAttribute('aria-expanded','true');

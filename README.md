@@ -58,3 +58,23 @@ firebase deploy --only hosting --project YOUR_FIREBASE_PROJECT_ID
 - https://firebase.google.com/docs/auth/web/google-signin
 - https://firebase.google.com/docs/auth/web/redirect-best-practices
 - https://firebase.google.com/docs/hosting/test-preview-deploy
+
+## 検証ラボ
+
+「検証ラボ」には、今開いているプレビュー向けの機能をまとめています。
+
+| タブ | できること |
+| --- | --- |
+| 診断 | ファイル不足・CSP・エラーの切り分け、現在の1ページの簡易チェック、短時間のフレーム計測、リンク先・小さな操作領域・コントラストの確認、匿名化したJSON出力 |
+| ファイル | Markdown、JSON、CSV・TSV、画像・SVG、PDF、音声・動画、フォント、glTF・GLBの簡易形状、ソース、OpenAPI。ファイル単体・ZIP・フォルダに対応 |
+| 比較 | 今の版を固定して新しいZIPを開き、同じビューポートで左右を比較。左右の保存領域は独立。ログ・エラー・通信件数・ファイルサイズの増減を表示 |
+| テスト | `fetch` の遅延・JSONモック、外部通信のオフライン条件、日時と既定の表示タイムゾーン・言語、手順チェックリスト、CSSセレクターでの可視性確認 |
+| 接続 | GitHubのリポジトリ・ブランチ・PRのZIPを取得する導線、端末テスト用QRコード、自分の開発サーバーを開く、対応ブラウザでフォルダの自動追従 |
+
+ファイル閲覧は元のファイルを書き換えません。比較とAPIモックは隔離プレビューの機能です。比較は外部通信を切った状態で起動し、同サイズのファイル修正はサイズ一覧には出ません。モックは相対URLまたは同じアプリのパスへの `fetch` が対象で、外部サービスやXHRを書き換えません。YAMLのOpenAPI表示は基本的なマッピングと応答例を対象にし、外部参照を読み込みません。glTF・GLBは形状を確認するための表示で、テクスチャ・ボーン・アニメーションを再現しません。PDF・音声・動画の表示はブラウザの対応形式に依存します。
+
+Vue・Svelte・Astro・Next.jsやGame EngineのWeb出力など、外部ビルドや専用ランタイムを使うアプリは静的出力を開くか、既に動かしている開発用URLを使います。ZipStageは任意のnpmスクリプトやサーバープログラムを自動実行しません。実際のGoogleログイン・PWA・IndexedDBは検証用HTTPSを別タブで開いて試します。Firebaseのテストアカウントには、アプリからエミュレーターに接続する設定が必要です。
+
+iPad Safariではファイル選択・ZIP・タッチ操作を想定しています。フォルダ選択または自動追従が環境により選べない場合でも、ファイルアプリでZIPにまとめて開けます。Resize・分割バーはPointer Eventsを使い、動きを減らす設定も尊重します。
+
+配布ZIPから起動するときは `node server.mjs` を実行します。Firebase Hostingでは同梱の `firebase.json` が `dist/` を公開用に指定します。Git管理のソースでは `node --test tests/*.test.mjs` で回帰テストを実行できます。
