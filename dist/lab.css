@@ -8,10 +8,10 @@
 .lab-dialog h2{margin-top:4px;font-size:1.12rem}
 .lab-dialog h2 svg,.lab-kicker{color:var(--accent-ink)}
 .lab-kicker{display:block;font-weight:780;font-size:.72rem;letter-spacing:.08em}
-.lab-tabs{display:flex;gap:4px;flex:none;overflow:auto;overscroll-behavior:contain;padding:6px 16px 8px;background:var(--raised);border-bottom:1px solid var(--border);scrollbar-width:thin}
+.lab-tabs{display:flex;gap:4px;flex:none;overflow:auto;overscroll-behavior:contain;padding:6px 16px 8px;background:var(--raised);border-bottom:1px solid var(--border)}
 .lab-tabs .btn{border-color:transparent;border-radius:8px;padding-inline:14px;background:transparent;flex:none}
 .lab-tabs .btn[aria-selected=true],.lab-actions .btn[aria-pressed=true]{color:var(--accent-ink);background:var(--accent-bg);border-color:var(--accent-edge)}
-.lab-body{min-height:180px;overflow:auto;overscroll-behavior:contain;padding:14px 17px 20px;scrollbar-width:thin}
+.lab-body{min-height:180px;overflow:auto;overscroll-behavior:contain;padding:14px 17px 20px}
 .lab-body:focus-visible{outline-offset:-4px}
 .lab-block{padding:16px;background:var(--panel);border:1px solid var(--border);border-radius:12px;min-width:0;margin-bottom:12px;display:grid;gap:9px;animation:lab-content var(--lab-quick) var(--lab-ease)}
 .lab-block:last-child{margin-bottom:0}

@@ -62,6 +62,13 @@ export function toolDock($,bridge,ctx){
     if(!wasOpen||changed)ctx.reflow(()=>{
       drawer.classList.add('is-open');ctx.panel(true);mount();
     });
+    const strip=$('tool-tabs'),active=buttons.find(b=>b.dataset.key===key);
+    if(active&&strip.scrollWidth>strip.clientWidth){
+      const left=strip.getBoundingClientRect().left+strip.clientLeft;
+      const rect=active.getBoundingClientRect(),right=left+strip.clientWidth;
+      if(rect.left<left)strip.scrollLeft+=Math.floor(rect.left-left);
+      else if(rect.right>right)strip.scrollLeft+=Math.ceil(rect.right-right);
+    }
     if(wasOpen&&changed)enterContent(host,{duration:135,y:0});
   }
   function close(){

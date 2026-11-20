@@ -1,0 +1,64 @@
+/* ZipStage chrome only. Iframes keep the page or document's own scrollbars. */
+:root {
+  --scroll-thumb: #66828e;
+  --scroll-thumb-hover: #456d79;
+  --scroll-thumb-active: #286274;
+  --scroll-size: 11px;
+  --scroll-inset: 2px;
+}
+:root[data-theme=dark] {
+  --scroll-thumb: #6b8996;
+  --scroll-thumb-hover: #8fadb7;
+  --scroll-thumb-active: #a8c9d1;
+}
+
+/* The tab strip scrolls sideways only, without hiding overflow affordances. */
+.tool-tabs {
+  overflow-x: auto;
+  overflow-y: hidden;
+  --scroll-size: 8px;
+  --scroll-inset: 1px;
+}
+
+@media not (forced-colors: active) {
+  /* Covers existing and dynamically mounted scrollers and both scroll axes. */
+  :where(*) {
+    scrollbar-color: var(--scroll-thumb) transparent;
+  }
+
+  @media (prefers-contrast: more) {
+    :root, :root[data-theme=dark] { --scroll-thumb: var(--ink); }
+  }
+
+  @media (pointer: fine) {
+    :where(*) { scrollbar-width: thin; }
+
+    @supports selector(::-webkit-scrollbar) {
+      /* Non-auto standard values take precedence over the rounded skin. */
+      :where(*) {
+        scrollbar-width: auto;
+        scrollbar-color: auto;
+      }
+      :where(*)::-webkit-scrollbar {
+        width: var(--scroll-size);
+        height: var(--scroll-size);
+      }
+      :where(*)::-webkit-scrollbar-track,
+      :where(*)::-webkit-scrollbar-corner {
+        background: transparent;
+      }
+      :where(*)::-webkit-scrollbar-thumb {
+        background: var(--scroll-thumb);
+        background-clip: padding-box;
+        border: var(--scroll-inset) solid transparent;
+        border-radius: 999px;
+      }
+      :where(*)::-webkit-scrollbar-thumb:hover {
+        background-color: var(--scroll-thumb-hover);
+      }
+      :where(*)::-webkit-scrollbar-thumb:active {
+        background-color: var(--scroll-thumb-active);
+      }
+    }
+  }
+}
