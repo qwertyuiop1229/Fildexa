@@ -6,19 +6,20 @@ import {toolDock} from './tool-dock.mjs';
 import {cancelMotion,rectOf,playFlip,enterContent,flashIcon,cornerToggle} from './motion.mjs';
 import {previewPolicy,previewSandbox} from './policy.mjs';
 import {createLayout} from './layout.mjs';
+import {nativeControl,probeNative,createNative,stopNative,inspectCompatibility,parseHosted} from './native.mjs';
 
 const $=id=>document.getElementById(id);
-const state={job:0,gen:0,archive:null,projects:[],project:null,items:null,original:null,frame:null,session:null,online:false,cdn:false,game:false,view:'desktop',focus:'',open:false,storage:{},packages:{},transformed:[],sourceRoot:'',history:[],index:-1,custom:[900,640],persist:false};
+const state={job:0,gen:0,archive:null,projects:[],project:null,items:null,original:null,frame:null,session:null,online:false,cdn:false,game:false,mode:'isolated',report:[],view:'desktop',focus:'',open:false,storage:{},packages:{},transformed:[],sourceRoot:'',history:[],index:-1,custom:[900,640],persist:false};
 let saved;
 try{saved=new SavedProjects(localStorage);}catch{}
 const bridge=(action,value)=>{
   const {frame,session}=state;
-  if(!frame||!session?.done)return false;
+  if(state.mode!=='isolated'||!frame||!session?.done)return false;
   frame.contentWindow.postMessage({zipstage:session.token,type:'dev',value:{action,value}},'*');return true;
 };
 const sourceFiles=()=>state.original??[];
 let layout;
-const dock=toolDock($,bridge,{files:sourceFiles,storage:()=>state.storage,openStorage,reflow:resizeStage,panel:value=>layout?.panel(value),mountSplit:host=>layout?.mount(host),metadata:()=>({online:state.online,phase:state.frame?'プレビュー中':'未起動',compiler:state.transformed.length,duration:state.startMs})});
+const dock=toolDock($,bridge,{files:sourceFiles,storage:()=>state.storage,openStorage,reflow:resizeStage,panel:value=>layout?.panel(value),mountSplit:host=>layout?.mount(host),metadata:()=>({online:state.online,native:state.mode!=='isolated',phase:state.frame?'プレビュー中':'未起動',compiler:state.transformed.length,duration:state.startMs})});
 const pickers={
   root:createPicker($('root-picker'),'root-label',i=>selectProject(Number(i))),
   page:createPicker($('page-picker'),'page-label',page=>navigate({page}))
@@ -61,6 +62,86 @@ function switchSidebar(open){
 function resetSettings(){
   state.online=false;state.cdn=false;$('online').checked=false;$('npm').checked=false;$('npm-option').hidden=true;networkNote();
 }
+function stopLocal(){
+  const id=state.native?.id;
+  // If reset wins the race with startup, wait for its response and release the session it created.
+  state.native=null;state.hosted=null;state.nativePending=null;state.mode='isolated';
+  $('mode-status').textContent='隔離';
+  if(id)void stopNative(id);
+}
+let compatAvailable=false,compatProbing=nativeControl(location);
+function syncCompat(loaded){
+  const local=state.mode==='native',hosted=state.mode==='hosted',normal=local||hosted,ready=!!state.items;
+  const sourceBuild=state.build&&state.project?.root===state.sourceRoot;
+  $('compat-inline').hidden=!loaded;$('mode-status').hidden=!loaded&&!normal;
+  $('mode-status').textContent=local?'ローカル':hosted?'テストURL':'隔離';
+  $('compat-summary').textContent=state.report.length?state.report.map(item=>item.label).slice(0,3).join(' · ')+(state.report.length>3?' ほか':''):'実行環境を切り替えられます。';
+  $('native-run').disabled=!ready||!compatAvailable||!!state.nativePending||normal||sourceBuild;
+  $('isolated-mode').disabled=!normal;
+  $('spa-option').hidden=!compatAvailable||local;
+  $('native-tab').hidden=!normal;
+  if(state.native&&(!$('native-tab').getAttribute('href')||new URL($('native-tab').href).origin!==new URL(state.native.url).origin))$('native-tab').href=state.native.url;
+  if(hosted)$('native-tab').href=state.hosted.url;
+  if(!normal)$('native-tab').removeAttribute('href');
+  $('online').disabled=normal;$('persist').disabled=normal||!state.key||!saved;
+  $('pointer-lock').disabled=normal||!ready;$('npm').disabled=normal;
+  $('native-note').textContent=compatProbing?'PC版の起動を確認中…':!compatAvailable?'公開版では起動できません。配布ZIPを展開し、自分のPCで node server.mjs を実行してください。':state.nativePending?'ファイルをローカルで準備中…':sourceBuild?'ローカル互換モードはビルド済みの公開フォルダが必要です。ビルドしてから dist または公開フォルダを開いてください。':local?(state.native?.authLocal?'認証テスト用 localhost:4176。プレビュー内で止まる場合は別タブを使ってください。':'起動中。ログインや権限の確認は別タブも利用できます。'):'ファイルは自分のPC内だけで配信します。開発ツールのJS実行・通信記録は隔離モード用です。';
+  const list=$('compat-findings');list.replaceChildren();
+  for(const row of state.report.length?state.report:[{label:'調査範囲内で特別な技術は検出されませんでした。',path:''}]){
+    const item=document.createElement('li');item.textContent=row.label+(row.path?' · '+row.path:'');list.append(item);
+  }
+}
+function openCompat(){
+  syncCompat(!!state.project);
+  if(!$('compat-dialog').open)$('compat-dialog').showModal();
+}
+$('open-compat').onclick=$('mode-status').onclick=openCompat;
+$('open-hosted').onclick=()=>{openCompat();$('hosted-url').focus({preventScroll:true});};
+$('hosted-form').onsubmit=e=>{
+  e.preventDefault();
+  $('hosted-note').textContent='';
+  try{
+    const parsed=parseHosted($('hosted-url').value,location.origin);
+    stopLocal();state.job++;state.gen++;dispose();state.mode='hosted';state.hosted={url:parsed.href};
+    $('close-project').disabled=false;message();resetSettings();dock.close();dock.reset();
+    showLocalFrame();syncCompat(!!state.project);$('compat-dialog').close();
+    $('project-announcement').textContent='テストURLを開きました。表示できないときは、テストURLボタンから別タブで開けます。';
+  }catch(err){$('hosted-note').textContent=String(err.message??err);}
+};
+$('native-run').onclick=async()=>{
+  if(!compatAvailable||!state.items||state.nativePending||state.mode!=='isolated'||state.build&&state.project?.root===state.sourceRoot)return;
+  const job=state.job,project=state.project,rows=state.items,gen=state.gen;
+  const pending=Symbol();state.nativePending=pending;syncCompat(true);
+  try{
+    const r=await createNative(rows,{entry:state.history[state.index]?.page??project.home,rewrites:project.rewrites,spa:$('spa-fallback').checked||state.report.some(x=>x.id==='spa')});
+    if(state.job!==job||state.project!==project||state.nativePending!==pending||state.gen!==gen){await stopNative(r.id);return;}
+    state.native=r;state.mode='native';dock.close();dock.reset();showLocalFrame();
+  }catch(e){
+    if(state.nativePending===pending){state.nativePending=null;syncCompat(true);$('native-note').textContent=String(e.message??e);}
+  }finally{
+    if(state.nativePending===pending){state.nativePending=null;syncCompat(!!state.project);}
+  }
+};
+$('isolated-mode').onclick=()=>{
+  if(state.mode==='isolated')return;
+  if(!state.items){resetProject();$('compat-dialog').close();return;}
+  stopLocal();syncCompat(true);$('compat-dialog').close();void start();
+};
+function showLocalFrame(page){
+  const native=state.native??state.hosted;if(!native)return;
+  const remote=state.mode==='hosted';
+  dispose();
+  const frame=document.createElement('iframe');frame.title=remote?'公開・テストURLのプレビュー':'ローカル互換プレビュー';frame.referrerPolicy='no-referrer';
+  frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-pointer-lock');
+  frame.setAttribute('allowfullscreen','');frame.setAttribute('allow','fullscreen');
+  const url=new URL(native.url);if(page&&!remote)url.pathname='/'+page.split('/').map(encodeURIComponent).join('/');
+  frame.src=url.href;$('native-tab').href=url.href;
+  state.frame=frame;$('frame-wrap').replaceChildren(frame);$('frame-shell').hidden=false;
+  // Separate, ephemeral localhost origins provide native storage without exposing studio storage.
+  loading(false);$('empty').hidden=true;phase(remote?'テストURL':'ローカル','ready');$('path-label').textContent=remote?url.host:url.pathname;
+  $('focus-preview').disabled=false;$('reload').disabled=false;$('back').disabled=true;$('forward').disabled=true;measure();
+}
+window.addEventListener('pagehide',e=>{if(!e.persisted&&state.native)void stopNative(state.native.id);});
 function networkNote(){
   $('online-description').textContent=state.online?'オン · 外部APIに接続を試みます。CORS・ログインの制限は残ります。':'オフ · 外部リソースとAPI通信を制限します。';
 }
@@ -68,9 +149,10 @@ function resetGame(){
   state.game=false;$('pointer-lock').checked=false;$('pointer-lock').disabled=true;
 }
 function resetProject(){
+  stopLocal();state.report=[];
   state.job++;state.gen++;dispose();
   Object.assign(state,{archive:null,projects:[],project:null,items:null,original:null,packages:{},history:[],index:-1,name:'',size:0,transformed:[],compileErrors:[],build:false,sourceRoot:'',key:null,startMs:null});
-  resetSettings();resetGame();savedView();dock.close();dock.reset();
+  resetSettings();resetGame();savedView();syncCompat(false);$('hosted-url').value='';$('hosted-note').textContent='';dock.close();dock.reset();
   setFocus('');setView('desktop');custom(900,640);switchSidebar(false);
   $('file').value='';$('folder').value='';
   $('project-info').hidden=true;$('selection').hidden=true;
@@ -89,6 +171,7 @@ function updateRoute(){
   $('back').disabled=state.index<1;$('forward').disabled=state.index>=state.history.length-1;
   $('reload').disabled=!state.items;
   pickers.page.value(current.page);
+  if(state.mode!=='isolated')$('back').disabled=$('forward').disabled=true;
 }
 function navigate(info,{keep=false}={}){
   const current=urlState(info),prev=state.history[state.index];
@@ -97,6 +180,7 @@ function navigate(info,{keep=false}={}){
   updateRoute();void start({keep});
 }
 function go(step){
+  if(state.mode!=='isolated')return;
   if(state.index+step<0||state.index+step>=state.history.length)return;
   state.index+=step;updateRoute();void start({keep:true});
 }
@@ -104,7 +188,7 @@ function savedView(){
   const id=state.key,snapshot=id?saved?.load(id):null;
   state.persist=!!snapshot?.enabled;
   state.storage=state.persist?{localStorage:safeStorage(Object.entries(snapshot.local??{}))}:{};
-  $('persist').checked=state.persist;$('persist').disabled=!id||!saved;
+  $('persist').checked=state.persist;$('persist').disabled=state.mode!=='isolated'||!id||!saved;
 }
 function saveWorkspace(){
   if(!saved||!state.key)return;
@@ -118,6 +202,7 @@ function saveWorkspace(){
 }
 function selectProject(index){
   const project=state.projects[index];if(!project)return;
+  stopLocal();state.report=[];syncCompat(true);
   state.key=null;
   state.project=project;state.items=null;state.original=null;state.transformed=[];state.compileErrors=[];
   state.history=[urlState({page:project.home})];state.index=0;
@@ -127,6 +212,7 @@ function selectProject(index){
   updateRoute();void prepare();
 }
 async function inspect(input,title,flavor){
+  stopLocal();state.report=[];state.items=null;syncCompat(false);$('hosted-note').textContent='';
   const job=++state.job;state.gen++;dispose();dock.reset();resetSettings();resetGame();switchSidebar(false);
   $('close-project').disabled=false;$('project-announcement').textContent='';
   message();phase('解析中');empty('プロジェクトを確認中','HTMLと公開用フォルダを探しています。');loading(true,'ファイル構成を解析中');
@@ -178,13 +264,17 @@ async function prepare(){
     const items=await expand(state.archive,project,(i,n)=>{if(gen===state.gen)loading(true,'読み込み '+i+' / '+n,Math.round(i/n*100));},()=>gen!==state.gen);
     if(gen!==state.gen||!items)return;
     state.original=items;
+    void inspectCompatibility(items,()=>state.original!==items).then(rows=>{
+      if(state.original!==items)return;
+      state.report=rows;syncCompat(true);
+    }).catch(()=>{});
     const signature=await appSignature(items,project.home);
     if(gen!==state.gen)return;
     state.key=projectKey(state.name,project.root,state.sourceRoot,project.kind,signature);
     savedView();
     const result=await compile(items,(i,n)=>{if(gen===state.gen){phase('変換中');loading(true,'TypeScript・JSX を変換中  '+i+' / '+n,Math.round(i/n*100));}},()=>gen!==state.gen);
     if(!result||gen!==state.gen)return;
-    state.items=result.items;state.compileErrors=result.errors;$('pointer-lock').disabled=false;
+    state.items=result.items;state.compileErrors=result.errors;$('pointer-lock').disabled=false;syncCompat(true);
     const originals=new Map(items);
     state.transformed=result.items.filter(([p,file])=>file!==originals.get(p)).map(([p])=>p);
     if(result.errors.length)message(result.errors.length+'件のソースを変換できませんでした。コンソールで確認できます。');
@@ -193,6 +283,10 @@ async function prepare(){
   }catch(e){if(gen===state.gen)failure(e,'準備できませんでした');}
 }
 async function start({keep=false}={}){
+  if(state.mode!=='isolated'){
+    showLocalFrame(state.history[state.index]?.page);
+    return;
+  }
   if(!state.items)return;
   const gen=++state.gen,token=crypto.randomUUID(),location=state.history[state.index],online=state.online;
   dispose();if(!keep&&!dock.keepAfterReload())dock.reset();else dock.invalidate();
@@ -308,7 +402,7 @@ function setFocus(value){
   measure();playFlip(target,before,sameOuter?235:265);
 }
 $('fullscreen').onclick=()=>setFocus(state.focus==='workspace'?'':'workspace');
-$('focus-preview').onclick=()=>{if(state.session?.done){setFocus('only');focusButton.focus({preventScroll:true});}};
+$('focus-preview').onclick=()=>{if(state.session?.done||state.mode==='native'&&state.native||state.mode==='hosted'&&state.hosted){setFocus('only');focusButton.focus({preventScroll:true});}};
 focusButton.onclick=()=>corner.press();
 window.addEventListener('keydown',e=>{
   if(e.defaultPrevented||e.key!=='Escape'||document.querySelector('dialog[open]'))return;
@@ -422,3 +516,4 @@ $('erase-dialog').onclose=()=>{
 };
 networkNote();setView('desktop');$('focus-preview').disabled=true;
 layout=createLayout($,dock,resizeStage,measure,()=>{cancelMotion(frameShell);cancelMotion(viewPanel);});
+if(compatProbing)void probeNative(AbortSignal.timeout?.(5000)).then(found=>{compatAvailable=!!found;compatProbing=false;syncCompat(!!state.project);});

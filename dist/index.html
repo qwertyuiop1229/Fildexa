@@ -6,12 +6,16 @@
   <meta name="referrer" content="no-referrer">
   <meta name="description" content="ZIPにまとめたWebアプリをブラウザだけでプレビュー。">
   <title>ZipStage — ZIPでWebプレビュー</title>
-  <link rel="icon" type="image/svg+xml" href="./brand.svg">
+  <link rel="apple-touch-icon" href="./icons/icon-180.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#087968">
+  <link rel="icon" href="./icons/icon-32.png" type="image/png">
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./studio.css">
   <link rel="stylesheet" href="./motion.css">
   <link rel="stylesheet" href="./layout.css">
   <script type="module" src="./app.mjs"></script>
+  <link rel="stylesheet" href="./compat.css">
 </head>
 <body>
   <svg class="defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -47,7 +51,7 @@
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
   </defs></svg>
   <header class="topbar"><div class="top-in">
-    <a class="brand" href="./" aria-label="ZipStage ホーム"><span class="brand-mark"><svg><use href="#i-brand"/></svg></span><span>Zip<span class="brand-stage">Stage</span></span></a>
+    <a class="brand" href="./" aria-label="ZipStage ホーム"><span class="brand-mark"><img src="./icons/icon-192.png" width="36" height="36" alt=""></span><span>Zip<span class="brand-stage">Stage</span></span></a>
     <span class="brand-caption">WEB PROJECT STUDIO</span>
     <div class="top-right"><span class="private-tag"><svg><use href="#i-lock"/></svg>ブラウザ内で処理</span>
       <button class="icon-btn chrome-btn" id="theme" type="button" aria-label="ダークモードに切り替え" title="テーマ切り替え"><svg><use id="theme-icon" href="#i-moon"/></svg></button>
@@ -67,6 +71,11 @@
           <button class="btn" id="choose-folder" type="button"><svg><use href="#i-folder"/></svg>フォルダ</button>
         </div>
         <div id="project-info" class="project-info" hidden><span class="file-badge"><svg><use href="#i-file"/></svg></span><div><strong id="project-name"></strong><span id="project-detail"></span></div></div>
+        <button id="open-hosted" class="btn" type="button"><svg><use href="#i-screen"/></svg>公開・テストURLを開く</button>
+        <div id="compat-inline" class="compat-inline" hidden>
+          <button id="open-compat" class="btn" type="button"><svg><use href="#i-settings"/></svg><span>動作モード・互換性</span></button>
+          <p id="compat-summary" class="quiet" aria-live="polite"></p>
+        </div>
         <p id="load-msg" role="status" class="message" hidden></p>
       </section>
       <section id="settings" class="side-block settings">
@@ -111,7 +120,7 @@
           <button class="icon-btn" type="button" id="reload" title="再読み込み" aria-label="再読み込み" disabled><svg><use href="#i-reload"/></svg></button>
           <button class="icon-btn close-project" type="button" id="close-project" title="プレビューを閉じる" aria-label="プレビューを閉じる" disabled><svg><use href="#i-close"/></svg></button>
         </div>
-        <div class="address"><svg><use href="#i-lock"/></svg><span id="path-label">ファイルを開いて開始</span></div>
+        <div class="address"><svg><use href="#i-lock"/></svg><span id="path-label">ファイルを開いて開始</span><button class="mode-chip" id="mode-status" type="button" hidden>隔離</button></div>
         <span class="screen-label" id="view-label">PC</span>
       </div>
       <div class="sizebar" id="sizebar" hidden>
@@ -159,7 +168,7 @@
         <li><strong>画面サイズを変えて試す</strong><p>PC・スマホ・カスタムから選べます。カスタムでは幅と高さを入力するか、角のハンドルをドラッグできます。プレビューだけに拡大すると、右上の縮小アイコンが約1秒だけ表示されます。消えたら同じ角をタップして表示し、もう一度タップで戻れます。</p></li>
         <li><strong>開発ツールで調べる</strong><p>コンソール、要素検索、通信、ファイル、性能、ストレージをプレビューと並べて見られます。境界の細い線をドラッグすると広さを変えられます。幅が広い画面では、開発ツールを右にも配置できます。</p></li>
       </ol>
-      <div class="help-note compatibility"><strong>外部通信オンと本番公開は別です</strong><p>HTTPS・WSSの通信を試せますが、相手のCORSやログイン設定は変わりません。本番のURLと同じにはならず、Googleログイン、PWAのインストール、IndexedDB、サーバー処理などは別の環境で確認してください。</p><p>ログインや保存まで確認する場合は、公開用のファイルをローカルサーバーか専用のテスト用ホスティングで開いてください。Firebaseの本番データに接続したくない場合は、エミュレーターか別のテスト用プロジェクトを使います。</p></div>
+      <div class="help-note compatibility"><strong>外部通信オンと本番公開は別です</strong><p>HTTPS・WSSの通信を試せますが、相手のCORSやログイン設定は変わりません。本番のURLと同じにはならず、Googleログイン、PWAのインストール、IndexedDB、サーバー処理などは「動作モード・互換性」で確認方法を案内します。</p><p>ログインや保存まで確認する場合は、公開用のファイルをローカルサーバーか専用のテスト用ホスティングで開いてください。Firebaseの本番データに接続したくない場合は、エミュレーターか別のテスト用プロジェクトを使います。</p></div>
       <div class="help-note"><strong>ビルドが必要なアプリは</strong><p>TypeScript・JSX・基本的なVite構成をブラウザで簡易変換できます。独自のViteプラグインやサーバー処理があるアプリは、先にビルドして <code>dist</code> などを開いてください。FirebaseログインやPWAインストール、IndexedDBはこのプレビューでは使えません。</p></div>
     </div>
     <div class="help-demo"><div><strong>まずは動きを試す</strong><p>ZipStage内蔵の小さなサンプルです。</p></div><button class="btn primary" id="demo" type="button"><svg><use href="#i-play"/></svg>サンプルで試す</button></div>
@@ -177,6 +186,23 @@
     <div class="dialog-head"><h2 id="erase-title">保存データを削除しますか？</h2></div>
     <div class="dialog-body"><p id="erase-text"></p></div>
     <form method="dialog" class="dialog-actions"><button class="btn" value="cancel">キャンセル</button><button class="btn danger" value="erase">削除する</button></form>
+  </dialog>
+  <dialog id="compat-dialog" class="compat-dialog" aria-labelledby="compat-title">
+    <div class="dialog-head"><h2 id="compat-title">動作モード・互換性</h2><form method="dialog"><button class="btn">閉じる</button></form></div>
+    <div class="dialog-body">
+      <p class="compat-intro">何を試したいかで、実行環境を選んでください。</p>
+      <section class="compat-card"><strong>隔離プレビュー</strong><p>ZIPのファイルはブラウザ内で処理します。静的な画面、操作、許可した外部通信の確認に使えます。</p><button type="button" id="isolated-mode" class="btn">隔離プレビューに戻す</button></section>
+      <section class="compat-card"><strong>ローカル互換モード <span class="compat-tag">ZipStage Local</span></strong><p>自分のPC上で、別のホスト名とURLを使って実行します。IndexedDB、Service Worker、通常のページ遷移などを試せます。信頼できる自分のアプリ専用で、アプリ自身の外部通信は制限しません。本番の設定で起動すれば、本番データを読み書きする場合があります。</p>
+        <label class="compat-check" id="spa-option" hidden><input id="spa-fallback" type="checkbox"> 存在しないページURLを開始ページに戻す（SPA用）</label>
+        <div class="compat-actions"><button type="button" class="btn primary" id="native-run">信頼するアプリを起動</button></div>
+        <p id="native-note" class="quiet" role="status"></p>
+      </section>
+      <section class="compat-card"><strong>公開・テストURL</strong><p>別のHTTPSサイトを枠内で開きます。埋め込みや認証を相手が許可しない場合は、別タブで開きます。</p>
+        <form id="hosted-form" class="compat-actions"><label class="sr-only" for="hosted-url">テスト用HTTPS URL</label><input id="hosted-url" type="url" required placeholder="https://example.web.app/" maxlength="3500"><button class="btn primary" type="submit">開く</button></form>
+        <p id="hosted-note" class="quiet" role="status"></p><a class="btn" id="native-tab" target="_blank" rel="noopener noreferrer" hidden>別タブで開く</a></section>
+      <section class="compat-card"><strong>Googleログインや本番同等の確認</strong><p>ログイン先のFirebaseプロジェクトで、承認済みのドメインと正しい <code>authDomain</code> が必要です。PC版を <code>node server.mjs --auth-localhost</code> で起動し、テスト用Firebaseで <code>localhost</code> を承認すると、Googleのポップアップ方式を試せます。リダイレクト方式や端末間テストには、専用のFirebase Hostingテストサイトが適しています。ここから承認済みドメインを変更したり、ログイン情報を代理受信したりしません。</p><a href="https://firebase.google.com/docs/auth/web/redirect-best-practices?hl=ja" target="_blank" rel="noopener noreferrer">Firebase公式のログイン設定を確認</a></section>
+      <section class="compat-card"><strong>このプロジェクトで見つけた技術</strong><ul id="compat-findings"></ul><p class="quiet">ファイル名とコードからの目安です。ビルドされたコードや動的な依存先は見つからない場合があります。</p></section>
+    </div>
   </dialog>
 </body>
 </html>

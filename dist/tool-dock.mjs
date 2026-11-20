@@ -45,7 +45,7 @@ export function toolDock($,bridge,ctx){
   }
   function doBridge(type,value){
     if(bridge(type,value))return true;
-    log({level:'warn',message:'プレビューの起動を待ってから操作してください。'});return false;
+    log({level:'warn',message:ctx.metadata().native?'このモードではブラウザ標準の開発ツールを使ってください。':'プレビューの起動を待ってから操作してください。'});return false;
   }
   function syncPick(){
     if(view.pick){view.pick.setAttribute('aria-pressed',String(picking));view.pick.textContent=picking?'選択をキャンセル':'画面で選ぶ';}
@@ -85,7 +85,8 @@ export function toolDock($,bridge,ctx){
       view.list.onscroll=()=>{autoScroll=view.list.scrollHeight-view.list.scrollTop-view.list.clientHeight<22;};
       const form=create('form',undefined,'console-entry');
       const expr=input('JavaScriptを実行（プレビュー内）','JavaScriptコマンド');expr.type='text';expr.autocomplete='off';expr.spellcheck=false;
-      const b=create('button','実行','btn primary');b.type='submit';form.append(expr,b);host.append(form);
+      const b=create('button','実行','btn primary');b.type='submit';
+      if(ctx.metadata().native){expr.disabled=true;b.disabled=true;expr.placeholder='このモードではブラウザ標準の開発ツールを使用';}form.append(expr,b);host.append(form);
       form.onsubmit=e=>{e.preventDefault();const v=expr.value.trim();if(v&&v.length<=4000&&doBridge('command',v)){log({level:'command',message:v});expr.value='';}};
       renderLogs();
     }else if(tab==='elements'){
