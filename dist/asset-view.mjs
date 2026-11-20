@@ -1,3 +1,5 @@
+import {enterContent} from './motion.mjs';
+import {prettySize} from './workspace.mjs';
 import {assetBlob,relativeAsset,parseDelimited,parseApi,types,ext} from './lab-core.mjs';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const button=(text,fn)=>{const b=el('button',text,'btn lab-small');b.type='button';b.onclick=fn;return b;};
@@ -15,17 +17,24 @@ export function viewAssets(host,ctx){
   async function open(next){
     close();path=next;archiveToken=ctx.token();const turn=seq, same=()=>turn===seq;
     host.hidden=false;
-    const toolbar=el('div',undefined,'asset-bar'),mark=el('span','ファイル','lab-kicker'),title=el('strong',next);
-    title.title=next;toolbar.append(mark,title,button('閉じる',ctx.back));const pane=el('div',undefined,'asset-content');host.append(toolbar,pane);
-    pane.append(el('p','ファイルを読み込み中…','quiet'));
+    const toolbar=el('div',undefined,'asset-bar'),meta=el('div',undefined,'asset-heading'),mark=el('span',ext(next).toUpperCase(),'lab-badge accent'),title=el('strong',next.split('/').at(-1));title.title=next;
+    const details=el('span','読み込み中…','quiet');meta.append(title,details);
+    const tools=el('div',undefined,'lab-actions asset-actions');
+    const browse=button('ファイル一覧',ctx.browse),back=button('閉じる',ctx.back);
+    back.setAttribute('aria-label','ファイルプレビューを閉じる');tools.append(browse,back);
+    toolbar.append(mark,meta,tools);
+    const pane=el('div',undefined,'asset-content'),loading=el('p','ファイルを読み込み中…','asset-loading');
+    loading.setAttribute('role','status');pane.append(loading);host.append(toolbar,pane);
+    back.focus({preventScroll:true});
     try{
       const blob=await ctx.read(next);if(!same())return;
       const format=ext(next),file=assetBlob(next,blob);
+      details.textContent=prettySize(blob.size);
       const link=el('a','元ファイル','btn lab-small');link.download=next.split('/').at(-1);link.href=url(file);
-      toolbar.insertBefore(link,toolbar.lastChild);
-      pane.replaceChildren();
+      tools.insertBefore(link,back);
+      pane.replaceChildren();enterContent(pane,{duration:150,y:2});
       if(types.image.test(next)){
-        const tools=el('div',undefined,'lab-actions'),well=el('div',undefined,'asset-image checker'),img=el('img');img.src=link.href;img.alt=title.textContent;
+        const tools=el('div',undefined,'lab-actions asset-segment');tools.setAttribute('role','group');tools.setAttribute('aria-label','画像の背景');const well=el('div',undefined,'asset-image checker'),img=el('img');img.src=link.href;img.alt=title.textContent;
         img.onerror=()=>well.replaceChildren(el('p','このブラウザではこの画像を表示できません。','quiet'));
         well.append(img);for(const [name,cls] of [['透明','checker'],['明','light'],['暗','dark']]){
           const b=button(name,()=>{well.className='asset-image '+cls;for(const item of tools.querySelectorAll('button'))item.setAttribute('aria-pressed',String(item===b));});
@@ -117,7 +126,7 @@ export function viewAssets(host,ctx){
           }else pane.append(pre(text));
         }else pane.append(pre(text));
       }else pane.append(el('p','この形式はブラウザで表示できません。「元ファイル」を使ってください。','quiet'));
-    }catch(e){if(same())pane.replaceChildren(el('p',String(e?.message??e),'lab-error'));}
+    }catch(e){if(same()){details.textContent='読み込みエラー';const error=el('p',String(e?.message??e),'lab-error');error.setAttribute('role','status');pane.replaceChildren(error);}}
   }
   return {open,close,current:()=>path,isCurrent:()=>path&&archiveToken===ctx.token()};
 }

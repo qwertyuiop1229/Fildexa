@@ -78,3 +78,37 @@ test('Fetch mock handles route parameters, expected status, and does not call re
   assert.equal(env.navigator.onLine,false);
   assert.equal(calls.length,0);
 });
+
+test('Comparison matches same-sized changes, reports skipped reads, and cancels stale work',async()=>{
+  const {compareFiles}=await import('../dist/lab-core.mjs');
+  const left=[['changed.txt',new Blob(['ab'])],['same.txt',new Blob(['12'])],['removed.txt',new Blob(['abc'])]];
+  const right=[['changed.txt',new Blob(['ac'])],['same.txt',new Blob(['12'])],['added.txt',new Blob(['abc'])]];
+  const normal=await compareFiles(left,right);
+  assert.deepEqual(normal.changes.map(x=>[x.path,!!x.content]),[['added.txt',false],['removed.txt',false],['changed.txt',true]]);
+  assert.equal(normal.examined,2);
+  assert.equal((await compareFiles(left,right,{limit:3})).skipped,2);
+  assert.equal(await compareFiles(left,right,{cancel:()=>true}),null);
+});
+test('Comparison navigates to valid pages without reloading an identical route',async()=>{
+  const {comparisonRoute}=await import('../dist/lab-core.mjs');const pages=['index.html','other.html'];
+  const prev={page:'index.html'};
+  assert.equal(comparisonRoute({page:'index.html'},prev,'index.html',pages),null);
+  assert.deepEqual(comparisonRoute({page:'other.html',hash:'#id',request:'other'},prev,'index.html',pages),{page:'other.html',query:'',hash:'#id',request:'other'});
+  assert.deepEqual(comparisonRoute({page:'unknown'},null,'index.html',pages),prev);
+});
+test('A validation error names the affected mock row and rejects equivalent route patterns',async()=>{
+  const {mockRuleProblem}=await import('../dist/lab-core.mjs');
+  const a={method:'GET',path:'/api/{id}',status:200,body:'{}'};
+  assert.equal(mockRuleProblem([a]),null);
+  assert.deepEqual(mockRuleProblem([a,{...a,status:110}]),{line:2,field:'ステータス（200〜599）'});
+  assert.deepEqual(mockRuleProblem([a,{...a,path:'/api/{post}'}]),{line:2,field:'重複するメソッドとパス'});
+  assert.deepEqual(mockRuleProblem([{...a,path:'/a/{oops'}]),{line:1,field:'パス'});
+});
+test('Picker position stays in the visible viewport and flips away from the keyboard',async()=>{
+  const {pickerBounds}=await import('../dist/picker.mjs');
+  const view={left:0,top:15,right:390,bottom:460};
+  const anchor={left:305,top:373,right:385,bottom:417,width:80};
+  const b=pickerBounds(anchor,view);
+  assert.equal(b.above,true);assert.equal(b.left,279);assert.equal(b.width,105);assert.equal(b.edge,369);
+  assert.equal(pickerBounds({...anchor,top:475,bottom:515},view),null);
+});

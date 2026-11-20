@@ -1,4 +1,14 @@
 let globalClose;
+export function pickerBounds(anchor,view,cap=260){
+  const {left,top,right,bottom}=view, margin=6, gap=4;
+  if(anchor.bottom<=top||anchor.top>=bottom||anchor.right<=left||anchor.left>=right)return null;
+  const down=bottom-anchor.bottom-margin-gap,up=anchor.top-top-margin-gap,above=down<138&&up>down;
+  const maxHeight=Math.min(cap,above?up:down);
+  if(maxHeight<28)return null;
+  const width=Math.min(right-left-2*margin,Math.max(105,anchor.width));
+  if(width<=0)return null;
+  return {left:Math.max(left+margin,Math.min(anchor.left,right-width-margin)),width,maxHeight,edge:above?anchor.top-gap:anchor.bottom+gap,above};
+}
 export function createPicker(host,labelId,onChange){
   const controller=new AbortController(), signal=controller.signal;
   const on=(node,type,fn,options={})=>node.addEventListener(type,fn,{...options,signal});
@@ -27,14 +37,25 @@ export function createPicker(host,labelId,onChange){
     button.setAttribute('aria-expanded','false');if(globalClose===close)globalClose=null;
   }
   function position(){
-    const r=button.getBoundingClientRect(),vh=window.innerHeight,vw=window.innerWidth;
-    if(r.bottom<=0||r.top>=vh){close();return;}
-    const down=vh-r.bottom-7,up=r.top-7,above=down<130&&up>down;
-    const width=Math.min(vw-12,Math.max(95,button.offsetWidth));
-    menu.style.width=width+'px';menu.style.left=Math.max(6,Math.min(r.left,vw-width-6))+'px';
-    menu.style.maxHeight=Math.max(38,Math.min(244,above?up:down))+'px';
-    menu.style.top=above?'auto':(r.bottom+4)+'px';menu.style.bottom=above?(vh-r.top+4)+'px':'auto';
-    menu.dataset.placement=above?'above':'below';
+    const visual=window.visualViewport;
+    const left=visual?.offsetLeft??0,top=visual?.offsetTop??0;
+    const view={left,top,right:left+(visual?.width??window.innerWidth),bottom:top+(visual?.height??window.innerHeight)};
+    const portal=host.closest('dialog'),scroller=host.closest('.lab-body');
+    const anchor=button.getBoundingClientRect();
+    if(scroller){
+      const clip=scroller.getBoundingClientRect();
+      if(anchor.bottom<=clip.top||anchor.top>=clip.bottom){if(shown)close();return false;}
+    }
+    if(portal){
+      const rect=portal.getBoundingClientRect();
+      view.left=Math.max(view.left,rect.left);view.right=Math.min(view.right,rect.right);
+      view.top=Math.max(view.top,rect.top);view.bottom=Math.min(view.bottom,rect.bottom);
+    }
+    const g=pickerBounds(anchor,view);if(!g){if(shown)close();return false;}
+    menu.style.width=g.width+'px';menu.style.left=g.left+'px';
+    menu.style.maxHeight=g.maxHeight+'px';
+    menu.style.top=g.above?'auto':g.edge+'px';menu.style.bottom=g.above?(window.innerHeight-g.edge)+'px':'auto';
+    menu.dataset.placement=g.above?'above':'below';return true;
   }
   function move(index){
     highlight=(index+values.length)%values.length;
@@ -47,9 +68,9 @@ export function createPicker(host,labelId,onChange){
   }
   function open(){
     if(!values.length)return;
-    globalClose?.();globalClose=close;
+    globalClose?.();
     const portal=host.closest('dialog')??document.body;if(menu.parentNode!==portal)portal.append(menu);
-    position();
+    if(!position())return;globalClose=close;
     // Keep the list in the layout between opens so both directions can fade.
     menu.hidden=false;menu.getBoundingClientRect();
     shown=true;menu.dataset.open='true';menu.inert=false;menu.setAttribute('aria-hidden','false');button.setAttribute('aria-expanded','true');
@@ -77,7 +98,9 @@ export function createPicker(host,labelId,onChange){
     }
   });
   on(document,'pointerdown',e=>{if(shown&&!host.contains(e.target)&&!menu.contains(e.target))close();},{capture:true});
-  on(window,'resize',()=>{if(shown)position();});
+  const reflow=()=>{if(shown)position();};
+  on(window,'resize',reflow);
+  if(window.visualViewport){on(window.visualViewport,'resize',reflow);on(window.visualViewport,'scroll',reflow);}
   on(document,'scroll',e=>{if(shown&&e.target!==menu)position();},{capture:true});
   return {
     set(items,value){close();values=items;current=value;

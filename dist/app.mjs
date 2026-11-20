@@ -583,11 +583,12 @@ lab=createLab($,{
   state:()=>({phase:state.phase,report:state.report,compileErrors:state.compileErrors??[],hosted:state.hosted?.url,duration:state.startMs,route:state.history[state.index]?describePage(state.history[state.index]):state.hosted?.url??''}),
   view:()=>({mode:state.view,custom:[...state.custom],...state.history[state.index]}),
   viewport:()=>state.view==='desktop'?[$('frame-wrap').clientWidth||$('screen').clientWidth,$('frame-wrap').clientHeight||$('screen').clientHeight]:presets[state.view]??state.custom,
-  snapshot:()=>state.items&&state.mode==='isolated'&&state.history[state.index]?{name:state.name,items:state.items,transformed:state.transformed,home:state.project.home,pages:state.project.pages,rewrites:state.project.rewrites,route:state.history[state.index],fileSizes:state.original.map(([p,f])=>[p,f.size])}:null,
+  snapshot:()=>state.items&&state.mode==='isolated'&&state.history[state.index]?{name:state.name,items:state.items,transformed:state.transformed,home:state.project.home,pages:state.project.pages,rewrites:state.project.rewrites,route:state.history[state.index],files:state.original}:null,
   bridge,runner:runnerCode,ready:()=>!!state.session?.done,
-  dock:dock.open,compat:openCompat,folder:()=>$('choose-folder').click(),
+  dock:dock.open,compat:openCompat,file:()=>$('choose-file').click(),folder:()=>$('choose-folder').click(),
   network:dock.reportNetwork,hosted:openHosted,notice:message,
-  apply:opt=>{if(state.mode!=='isolated'||!state.items)return;if(!labSettings||!opt)testStorage={};labSettings=opt;syncCompat(true);$('test-indicator').hidden=!opt;void start();},
+  applied:()=>labSettings,
+  apply:opt=>{if(state.mode!=='isolated'||!state.items)return false;if(!labSettings||!opt)testStorage={};labSettings=opt;syncCompat(true);$('test-indicator').hidden=!opt;void start();return true;},
   watch:async(rows,name,first)=>{
     const job=state.job;
     const scroll=first?0:await new Promise(resolve=>{
@@ -600,10 +601,12 @@ lab=createLab($,{
   }
 });
 $('file').accept=supported;
-$('open-lab').onclick=()=>lab.selection('diagnosis');
+$('open-lab').onclick=()=>lab.selection();
 $('project-assets').onclick=()=>lab.selection('files');
 $('test-indicator').onclick=()=>lab.selection('test');
 pickers.device.set([['mobile','スマホ・縦'],['tablet','タブレット・縦'],['landscape','タブレット・横'],['custom','カスタム']].map(([value,label])=>({value,label})),'mobile');
 syncCompat(false);networkNote();setView('desktop');$('focus-preview').disabled=true;
 layout=createLayout($,dock,resizeStage,measure,()=>{cancelMotion(frameShell);cancelMotion(viewPanel);});
 if(compatProbing)void probeNative(AbortSignal.timeout?.(5000)).then(found=>{compatAvailable=!!found;compatProbing=false;syncCompat(!!state.project);});
+
+for(const control of document.querySelectorAll('[data-boot-control]'))control.disabled=false;

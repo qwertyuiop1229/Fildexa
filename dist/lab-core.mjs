@@ -133,3 +133,46 @@ export function classify({files=[],report=[],issues=[],status='',compileErrors=[
   if(report.some(x=>/worker|storage|idb|indexed/i.test(x.id)))add('storage','ブラウザの保存機能を使うアプリ','Service Worker・IndexedDBはローカルモードまたはテストURLで確認してください。');
   return out;
 }
+
+export function assetGroup(path){
+  if(types.image.test(path)||types.font.test(path)||types.model.test(path)||types.audio.test(path)||types.video.test(path))return 'media';
+  if(/\.(?:json|csv|tsv|ya?ml|webmanifest)$/i.test(path))return 'data';
+  if(/\.(?:md|markdown|txt|log|pdf)$/i.test(path))return 'docs';
+  return 'code';
+}
+export function mockRuleProblem(rules){
+  const seen=new Set();
+  for(let i=0;i<rules.length;i++){
+    const r=rules[i],line=i+1;
+    if(!/^\/(?!\/)[^\s?#\\]{0,300}$/.test(r.path)||/[{}]/.test(r.path.replace(/\{[^/{}]+\}/g,'')))return {line,field:'パス'};
+    if(!Number.isInteger(r.status)||r.status<200||r.status>599)return {line,field:'ステータス（200〜599）'};
+    try{if(r.body.length>30000)throw Error();JSON.parse(r.body);}catch{return {line,field:'応答JSON'};}
+    const key=r.method+' '+r.path.replace(/\{[^/{}]+\}/g,'{}');
+    if(seen.has(key))return {line,field:'重複するメソッドとパス'};
+    seen.add(key);
+  }
+  return null;
+}
+export function comparisonRoute(next,prev,home,pages){
+  if(typeof next?.page!=='string'||!pages.includes(next.page))return {page:home};
+  const route={page:next.page,query:String(next.query??'').slice(0,700),hash:String(next.hash??'').slice(0,700),request:String(next.request??next.page).slice(0,1200)};
+  return route.page===prev?.page&&route.query===(prev.query??'')&&route.hash===(prev.hash??'')&&route.request===(prev.request??prev.page)?null:route;
+}
+export async function compareFiles(a,b,{limit=32*2**20,cancel=()=>false}={}){
+  const old=new Map(a),next=new Map(b),changes=sortedChanges(a.map(([p,f])=>[p,f.size]),b.map(([p,f])=>[p,f.size]));
+  let used=0,skipped=0,examined=0;
+  for(const [path,after] of next){
+    if(cancel())return null;
+    const before=old.get(path);
+    if(!before||before.size!==after.size||before===after||!after.size)continue;
+    if(used+after.size*2>limit){skipped++;continue;}
+    used+=after.size*2;
+    try{
+      const [x,y]=await Promise.all([before.arrayBuffer(),after.arrayBuffer()]);
+      if(cancel())return null;
+      const left=new Uint8Array(x),right=new Uint8Array(y);examined++;
+      if(left.some((byte,i)=>byte!==right[i]))changes.push({path,before:before.size,after:after.size,content:true});
+    }catch{skipped++;}
+  }
+  return {changes,skipped,examined};
+}

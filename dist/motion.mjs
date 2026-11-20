@@ -26,9 +26,9 @@ export function playFlip(element,before,duration=245) {
   if(!g)return;
   animate(element,[{transformOrigin:'top left',transform:'translate3d('+g.x+'px,'+g.y+'px,0) scale('+g.sx+','+g.sy+')'},{transformOrigin:'top left',transform:'translate3d(0,0,0) scale(1)'}],{duration});
 }
-export function enterContent(element,{duration=160,x=0,y=3}={}) {
+export function enterContent(element,{duration=160,x=0,y=3,opacity=.75}={}) {
   const offset='translate3d('+x+'px,'+y+'px,0)';
-  animate(element,[{opacity:.45,transform:offset},{opacity:1,transform:'translate3d(0,0,0)'}],{duration});
+  animate(element,[{opacity,transform:offset},{opacity:1,transform:'translate3d(0,0,0)'}],{duration});
 }
 export function flashIcon(element) {
   animate(element,[{opacity:.4,transform:'scale(.86)'},{opacity:1,transform:'scale(1)'}],{duration:175});

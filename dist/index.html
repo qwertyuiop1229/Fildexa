@@ -49,6 +49,9 @@
     <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><path d="M9 4v4m5 2v4m-5 2v4"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4 4"/></symbol>
     <symbol id="i-drag" viewBox="0 0 24 24"><path d="m6 18 12-12M12 18l6-6m-1 6h1v-1"/></symbol>
+    <symbol id="i-compare" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-network" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><ellipse cx="12" cy="12" rx="3.5" ry="8"/><path d="M4 12h16"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11m-4-4 4 4 4-4M5 16v4h14v-4"/></symbol>
     <symbol id="i-lab" viewBox="0 0 24 24"><path d="M10 4h4m-3 0v6l-5.1 7.9A1.4 1.4 0 0 0 7 20h10a1.4 1.4 0 0 0 1.1-2.1L13 10V4m-5 11h8"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
   </defs></svg>
@@ -56,9 +59,9 @@
     <a class="brand" href="./" aria-label="ZipStage ホーム"><span class="brand-mark"><img src="./icons/icon-192.png" width="36" height="36" alt=""></span><span>Zip<span class="brand-stage">Stage</span></span></a>
     <span class="brand-caption">WEB PROJECT STUDIO</span>
     <div class="top-right"><span class="private-tag"><svg><use href="#i-lock"/></svg>ブラウザ内で処理</span>
-      <button class="icon-btn chrome-btn" id="theme" type="button" aria-label="ダークモードに切り替え" title="テーマ切り替え"><svg><use id="theme-icon" href="#i-moon"/></svg></button>
-      <button class="btn lab-trigger" id="open-lab" type="button"><svg aria-hidden="true"><use href="#i-lab"/></svg>検証ラボ</button>
-      <button class="btn help-button" id="open-help" type="button"><svg><use href="#i-help"/></svg>使い方</button>
+      <button class="icon-btn chrome-btn" id="theme" type="button" disabled data-boot-control aria-label="ダークモードに切り替え" title="テーマ切り替え"><svg><use id="theme-icon" href="#i-moon"/></svg></button>
+      <button class="btn lab-trigger" id="open-lab" type="button" disabled data-boot-control><svg aria-hidden="true"><use href="#i-lab"/></svg>検証ラボ</button>
+      <button class="btn help-button" id="open-help" type="button" disabled data-boot-control><svg><use href="#i-help"/></svg>使い方</button>
     </div>
   </div></header>
   <p id="project-announcement" class="sr-only" role="status"></p>
@@ -68,10 +71,10 @@
       <section class="side-block">
         <input id="file" type="file" hidden>
         <input id="folder" type="file" webkitdirectory multiple hidden>
-        <button class="drop" id="drop" type="button"><span class="upload-icon"><svg><use href="#i-upload"/></svg></span><strong>ここにドロップ</strong><span class="drop-caption">ZIP・フォルダ・素材</span></button>
+        <button class="drop" id="drop" type="button" disabled data-boot-control><span class="upload-icon"><svg><use href="#i-upload"/></svg></span><strong>ここにドロップ</strong><span class="drop-caption">ZIP・フォルダ・素材</span></button>
         <div class="upload-actions">
-          <button class="btn" id="choose-file" type="button"><svg><use href="#i-zip"/></svg>ファイル</button>
-          <button class="btn" id="choose-folder" type="button"><svg><use href="#i-folder"/></svg>フォルダ</button>
+          <button class="btn" id="choose-file" type="button" disabled data-boot-control><svg><use href="#i-zip"/></svg>ファイル</button>
+          <button class="btn" id="choose-folder" type="button" disabled data-boot-control><svg><use href="#i-folder"/></svg>フォルダ</button>
         </div>
         <div id="project-info" class="project-info" hidden><span class="file-badge"><svg><use href="#i-file"/></svg></span><div><strong id="project-name"></strong><span id="project-detail"></span></div></div>
         <button id="open-hosted" class="btn" type="button"><svg><use href="#i-screen"/></svg>公開・テストURLを開く</button>
@@ -167,9 +170,10 @@
     </section>
   </main>
   <dialog id="lab-dialog" class="lab-dialog" aria-labelledby="lab-title">
-    <div class="dialog-head"><div><span class="lab-kicker">ZIPSTAGE / WORKSPACE</span><h2 id="lab-title"><svg aria-hidden="true"><use href="#i-lab"/></svg> 検証ラボ</h2></div><form method="dialog"><button class="btn">閉じる</button></form></div>
+    <div class="dialog-head"><div><span class="lab-kicker">ZIPSTAGE / WORKSPACE</span><h2 id="lab-title"><svg aria-hidden="true"><use href="#i-lab"/></svg> 検証ラボ</h2></div><form method="dialog"><button class="icon-btn chrome-btn lab-close" aria-label="検証ラボを閉じる" title="閉じる"><svg aria-hidden="true"><use href="#i-close"/></svg></button></form></div>
     <div id="lab-tabs" class="lab-tabs" role="tablist" aria-label="検証ラボの機能"></div>
     <div id="lab-body" class="lab-body" role="tabpanel" tabindex="0"></div>
+    <div id="lab-footer" class="lab-footer" hidden></div>
   </dialog>
   <dialog id="help-dialog" aria-labelledby="help-title">
     <div class="dialog-head"><h2 id="help-title">ZipStageの使い方</h2><form method="dialog"><button class="btn">閉じる</button></form></div>
