@@ -1,2 +1,4 @@
 dist/vendor/pdfjs/** -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
 dist/vendor/pdfjs/README.md text whitespace
+dist/vendor/sheetjs/xlsx.mjs -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+dist/vendor/sheetjs/LICENSE -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab

@@ -1,5 +1,6 @@
 import {enterContent} from './motion.mjs';
 import {mountPdf} from './asset-pdf.mjs';
+import {mountSheet} from './asset-sheet.mjs';
 import {hexPreview,hexPreviewLimit} from './asset-hex.mjs';
 import {mountJson} from './asset-json.mjs';
 import {mountImage} from './asset-image.mjs';
@@ -15,9 +16,9 @@ function table(headers,rows,sort){
   const body=el('tbody');for(const row of rows){const r=el('tr');for(const value of row)r.append(el('td',String(value??'')));body.append(r);}t.append(body);return t;
 }
 export function viewAssets(host,ctx){
-  let seq=0, urls=[], font=null, disposeModel=null,disposePdf=null,path='',archiveToken=null;
+  let seq=0, urls=[], font=null, disposeModel=null,disposeDocument=null,path='',archiveToken=null;
   const url=blob=>{const u=URL.createObjectURL(blob);urls.push(u);return u;};
-  function close(){seq++;for(const u of urls)URL.revokeObjectURL(u);urls=[];if(font)document.fonts.delete(font);font=null;disposeModel?.();disposeModel=null;disposePdf?.();disposePdf=null;host.replaceChildren();path='';archiveToken=null;}
+  function close(){seq++;for(const u of urls)URL.revokeObjectURL(u);urls=[];if(font)document.fonts.delete(font);font=null;disposeModel?.();disposeModel=null;disposeDocument?.();disposeDocument=null;host.replaceChildren();path='';archiveToken=null;}
   async function open(next){
     close();path=next;archiveToken=ctx.token();const turn=seq, same=()=>turn===seq;
     host.hidden=false;
@@ -43,7 +44,9 @@ export function viewAssets(host,ctx){
         const node=el(types.audio.test(next)?'audio':'video');node.controls=true;node.playsInline=true;node.preload='metadata';node.src=link.href;
         node.onerror=()=>pane.append(el('p','この端末ではこの音声・動画を再生できません。','quiet'));pane.append(node);
       }else if(types.pdf.test(next)){
-        disposePdf=mountPdf(file,pane,{element:el,button});
+        disposeDocument=mountPdf(file,pane,{element:el,button});
+      }else if(types.spreadsheet.test(next)){
+        disposeDocument=mountSheet(file,pane,{element:el,button});
       }else if(types.font.test(next)){
         const face=await new FontFace('ZipStageAsset',file.size<=16*2**20?await file.arrayBuffer():new ArrayBuffer(0)).load();
         if(!same())return;
