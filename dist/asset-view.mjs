@@ -1,5 +1,6 @@
 import {enterContent} from './motion.mjs';
 import {mountPdf} from './asset-pdf.mjs';
+import {mountDocx} from './asset-docx.mjs';
 import {mountSheet} from './asset-sheet.mjs';
 import {hexPreview,hexPreviewLimit} from './asset-hex.mjs';
 import {mountJson} from './asset-json.mjs';
@@ -45,6 +46,8 @@ export function viewAssets(host,ctx){
         node.onerror=()=>pane.append(el('p','この端末ではこの音声・動画を再生できません。','quiet'));pane.append(node);
       }else if(types.pdf.test(next)){
         disposeDocument=mountPdf(file,pane,{element:el,button});
+      }else if(types.document.test(next)){
+        disposeDocument=mountDocx(file,pane,{element:el,button});
       }else if(types.spreadsheet.test(next)){
         disposeDocument=mountSheet(file,pane,{element:el,button});
       }else if(types.font.test(next)){

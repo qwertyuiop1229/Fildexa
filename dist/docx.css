@@ -1,0 +1,152 @@
+.docx-layout {
+  --docx-gap: clamp(12px, 2vw, 24px);
+  display: grid;
+  gap: var(--docx-gap);
+  align-items: start;
+  padding-bottom: 5px;
+  min-width: 0;
+}
+
+.docx-has-outline { grid-template-columns: minmax(150px, 208px) minmax(0, 1fr); }
+.docx-reading { min-width: 0; width: min(100%, 900px); margin-inline: auto; }
+.docx-paper {
+  min-width: 0;
+  min-height: 260px;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: clamp(17px, 4vw, 48px);
+  color: var(--ink);
+  font-size: .96rem;
+  line-height: 1.75;
+}
+
+.docx-outline {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--raised);
+}
+
+.docx-outline summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  list-style: none;
+  padding: 10px 12px;
+  min-height: var(--lab-control);
+  color: var(--ink);
+}
+.docx-outline summary::-webkit-details-marker { display: none; }
+.docx-outline summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-1px) rotate(-45deg);
+  transition: transform 145ms var(--lab-ease);
+}
+.docx-outline[open] summary::before { transform: translateY(-2px) rotate(45deg); }
+.docx-outline[open] summary { border-bottom: 1px solid var(--border); }
+
+.docx-outline-nav {
+  overflow: auto;
+  max-height: min(58dvh, 450px);
+  overscroll-behavior: contain;
+  padding: 5px;
+}
+
+.docx-outline-item {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 7px 6px calc(7px + 8px * var(--heading-indent));
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--soft);
+  text-align: start;
+  font: inherit;
+  font-size: .85rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: background-color 135ms var(--lab-ease), color 135ms var(--lab-ease);
+}
+
+.docx-outline-item:is(:hover, :focus-visible, [aria-current]) {
+  color: var(--accent-ink);
+  background: var(--accent-bg);
+}
+
+.docx-paragraph {
+  margin: 0 0 .85em;
+  white-space: pre-wrap;
+  tab-size: 4;
+  overflow-wrap: anywhere;
+}
+.docx-paragraph[data-align="center"] { text-align: center; }
+.docx-paragraph[data-align="end"] { text-align: end; }
+.docx-paper .docx-heading {
+  margin: 1.25em 0 .38em;
+  color: var(--ink);
+  font-size: 1.08em;
+  font-weight: 760;
+  line-height: 1.4;
+}
+.docx-paper .docx-heading[data-level="1"] {
+  font-size: clamp(1.5rem, 2.3vw, 2rem);
+  letter-spacing: -.02em;
+}
+.docx-paper .docx-heading[data-level="2"] { font-size: 1.28em; }
+.docx-paper .docx-heading:focus-visible { outline-offset: 4px; border-radius: 4px; }
+.docx-paper .docx-paragraph:first-child { margin-top: 0; }
+.docx-paper .docx-paragraph:last-child { margin-bottom: 0; }
+
+.docx-table-block { margin: 1.2em 0; }
+.docx-table-hint { margin: 0 0 5px; color: var(--soft); font-size: .8rem; }
+.docx-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overscroll-behavior-inline: contain;
+}
+.docx-table {
+  border-collapse: collapse;
+  min-width: 100%;
+  background: var(--panel);
+  font-size: .9em;
+  line-height: 1.55;
+}
+.docx-table :is(td, th) {
+  min-width: 6.3rem;
+  max-width: 25rem;
+  padding: 8px 12px;
+  border-inline-end: 1px solid var(--border);
+  border-block-end: 1px solid var(--border);
+  vertical-align: top;
+  text-align: start;
+}
+.docx-table tr > :last-child { border-inline-end: 0; }
+.docx-table th { color: var(--ink); background: var(--field); font-weight: 720; }
+.docx-table .docx-paragraph { margin-bottom: .35em; }
+.docx-table .docx-paragraph:last-child { margin-bottom: 0; }
+.docx-omission, .docx-warning { color: var(--soft); font-size: .86rem; }
+.docx-warning { padding: 9px 12px; border-inline-start: 2px solid var(--border); }
+.docx-more { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.docx-more[hidden], .docx-more button[hidden] { display: none; }
+
+@media (max-width: 740px) {
+  .docx-has-outline { grid-template-columns: minmax(0, 1fr); }
+  .docx-outline-nav { max-height: min(35dvh, 270px); }
+  .docx-outline-item { min-height: 44px; }
+  .docx-table :is(td, th) { padding: 8px 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docx-outline summary::before, .docx-outline-item { transition: none; }
+}

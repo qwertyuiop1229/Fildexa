@@ -29,7 +29,7 @@ function readName(raw, extra, flags) {
   }
   try{return dec.decode(raw)}catch{if(flags&2048)fail('ZIPのファイル名を読み取れません。');return Array.from(raw,b=>b<128?String.fromCharCode(b):CP437[b-128]).join('');}
 }
-export function readZip(bytes) {
+export function readZip(bytes, { packageRelationships = false } = {}) {
   if(bytes.byteLength>limits.zip)fail('ZIPは120 MB以下にしてください。');
   const v=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength), L=bytes.length;
   const u16=i=>v.getUint16(i,true), u32=i=>v.getUint32(i,true);
@@ -49,7 +49,8 @@ export function readZip(bytes) {
     if(end>offset+size||disk)fail();
     const raw=readName(bytes.subarray(i+46,i+46+ns),bytes.subarray(i+46+ns,i+46+ns+es),flags);
     i=end;
-    const path=clean(raw);
+    // OOXML packages store their root relationships in this otherwise hidden part.
+    const path=packageRelationships && raw==='_rels/.rels' ? raw : clean(raw);
     if(!path || /[\\/]$/.test(raw) || (attrs>>>28)===10)continue;
     if(files.has(path))fail('同じ名前のファイルがZIP内に複数あります。');
     total+=length;
