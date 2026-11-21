@@ -45,7 +45,7 @@ try {
   run(process.execPath, ['--test'], { cwd: staging });
   run('git', ['push', 'origin', commit + ':refs/heads/main']);
   pushed = true;
-  const published = git('ls-remote', '--exit-code', 'origin', 'refs/heads/main').split(/s+/)[0];
+  const published = git('ls-remote', '--exit-code', 'origin', 'refs/heads/main').split('\t')[0];
   if (published !== commit) throw new Error('GitHub の main が更新されました。最新のコミットを確認してください。');
   run(process.execPath, [
     process.env.npm_execpath, 'exec', '--yes', '--package=firebase-tools@15.37.0',
