@@ -1,0 +1,47 @@
+.format-control-group,.pptx-toolbar{display:flex;align-items:center;gap:6px;min-width:0}
+.pptx-toolbar{justify-content:space-between;flex-wrap:wrap}
+.pptx-toolbar .btn[aria-pressed=true]{color:var(--accent-ink);border-color:var(--accent-edge);background:var(--accent-bg)}
+#pptx-slide-select{min-width:7.2rem}
+#pptx-slide-select .btn{width:100%}
+.pptx-stage{position:relative;container-type:inline-size;isolation:isolate;overflow:hidden;border:1px solid var(--border);border-radius:10px;width:min(100%,1050px,var(--pptx-fit,1050px));margin-inline:auto;box-shadow:var(--shadow)}
+.pptx-stage[hidden],.pptx-text[hidden]{display:none}
+.pptx-title{font-weight:650;overflow-wrap:anywhere}
+.pptx-box{position:absolute;overflow:hidden;line-height:1.21;padding:.35cqw .45cqw;overflow-wrap:anywhere}
+.pptx-centered{display:flex;flex-direction:column;justify-content:center}
+.pptx-box p{white-space:pre-wrap;margin:0 0 .22em}
+.pptx-box img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.pptx-text{width:min(100%,900px);margin-inline:auto;border:1px solid var(--border);border-radius:10px;background:var(--raised);padding:clamp(14px,2.8vw,32px);overflow-wrap:anywhere}
+.pptx-text h3{font-size:1.3rem;margin:0 0 .45em}
+.pptx-text p{margin:.2em 0 .7em;white-space:pre-wrap}
+.pptx-table-wrap{max-width:100%;overflow:auto}
+.pptx-table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:.85em}
+.pptx-table td{vertical-align:top;border:1px solid #8d9eaa88;padding:.24em .4em}
+.pptx-stage .pptx-table td{background:#f0f4f7;color:#162632}
+.pptx-text .pptx-table{table-layout:auto}
+.pptx-text .pptx-table td{min-width:5.5rem;border-color:var(--border);background:var(--panel);padding:7px 9px}
+.pptx-text .pptx-table td p{margin:0}
+@media(max-width:480px){.pptx-toolbar{gap:7px}.pptx-toolbar .btn{padding-inline:8px}.pptx-toolbar .format-control-group:first-child .btn{min-width:38px}}
+
+.format-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-block:9px}
+.format-controls[hidden]{display:none}
+.format-label{color:var(--soft);font-size:.84rem;font-variant-numeric:tabular-nums}
+.format-controls .btn[aria-pressed=true]{background:var(--accent-bg);color:var(--accent-ink);border-color:var(--accent-edge)}
+.format-player{display:block;width:min(100%,800px);max-height:56dvh;border-radius:9px}
+.media-speed{min-width:5.2rem}
+.media-speed .btn,#sqlite-table-select .btn{width:100%}
+.format-edit{margin-top:14px}
+.format-edit textarea{display:block;width:100%;min-height:10rem;padding:9px;margin:7px 0;resize:vertical;border:1px solid var(--border);border-radius:8px;background:var(--raised);color:var(--ink);font:inherit;font-family:monospace}
+.sqlite-controls{margin-top:0}
+.sqlite-controls input{flex:1 1 10rem;max-width:25rem}
+#sqlite-table-select{width:min(100%,18rem);flex:1 1 10rem}
+.sqlite-grid{max-height:50dvh;overflow:auto;border:1px solid var(--border);border-radius:9px;background:var(--raised);overscroll-behavior:contain}
+.sqlite-grid[aria-busy=true]{opacity:.6;transition:opacity 130ms var(--lab-ease)}
+.sqlite-grid .asset-table td{min-width:94px}
+.sqlite-empty{padding:10px;color:var(--soft)}
+@media(prefers-reduced-motion:reduce){.sqlite-grid[aria-busy=true]{transition:none}}
+.pptx-center-title{text-align:center}
+.pptx-stage[aria-busy=true]{background:var(--raised)}
+.format-wave{display:block;width:min(100%,800px);height:auto;border:1px solid var(--border);border-radius:8px;background:var(--raised);cursor:pointer}
+.format-wave[hidden]{display:none}
+
+@media(max-width:480px){#pptx-slide-select{min-width:5.9rem}.pptx-toolbar .btn{padding-inline:7px}}

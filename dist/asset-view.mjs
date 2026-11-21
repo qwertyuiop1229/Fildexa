@@ -5,6 +5,11 @@ import {mountSheet} from './asset-sheet.mjs';
 import {hexPreview,hexPreviewLimit} from './asset-hex.mjs';
 import {mountJson} from './asset-json.mjs';
 import {mountImage} from './asset-image.mjs';
+import {mountPresentation} from './asset-pptx.mjs';
+import {mountSqlite} from './asset-sqlite.mjs';
+import {mountMedia} from './asset-media.mjs';
+import {addTextCopy,decodeAssetText} from './asset-data.mjs';
+import {inferFormat} from './asset-signatures.mjs';
 import {prettySize} from './workspace.mjs';
 import {assetBlob,relativeAsset,parseDelimited,parseApi,types,ext} from './lab-core.mjs';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
@@ -17,9 +22,9 @@ function table(headers,rows,sort){
   const body=el('tbody');for(const row of rows){const r=el('tr');for(const value of row)r.append(el('td',String(value??'')));body.append(r);}t.append(body);return t;
 }
 export function viewAssets(host,ctx){
-  let seq=0, urls=[], font=null, disposeModel=null,disposeDocument=null,path='',archiveToken=null;
+  let seq=0, urls=[], font=null, disposeModel=null,disposeViewer=null,path='',archiveToken=null;
   const url=blob=>{const u=URL.createObjectURL(blob);urls.push(u);return u;};
-  function close(){seq++;for(const u of urls)URL.revokeObjectURL(u);urls=[];if(font)document.fonts.delete(font);font=null;disposeModel?.();disposeModel=null;disposeDocument?.();disposeDocument=null;host.replaceChildren();path='';archiveToken=null;}
+  function close(){seq++;for(const u of urls)URL.revokeObjectURL(u);urls=[];if(font)document.fonts.delete(font);font=null;disposeModel?.();disposeModel=null;disposeViewer?.();disposeViewer=null;host.replaceChildren();path='';archiveToken=null;}
   async function open(next){
     close();path=next;archiveToken=ctx.token();const turn=seq, same=()=>turn===seq;
     host.hidden=false;
@@ -42,14 +47,20 @@ export function viewAssets(host,ctx){
       if(types.image.test(next)){
         mountImage(pane,link.href,title.textContent,{element:el,button});
       }else if(types.audio.test(next)||types.video.test(next)){
-        const node=el(types.audio.test(next)?'audio':'video');node.controls=true;node.playsInline=true;node.preload='metadata';node.src=link.href;
-        node.onerror=()=>pane.append(el('p','この端末ではこの音声・動画を再生できません。','quiet'));pane.append(node);
+        disposeViewer=mountMedia(pane,link.href,file,types.video.test(next),{element:el,button});
       }else if(types.pdf.test(next)){
-        disposeDocument=mountPdf(file,pane,{element:el,button});
+        disposeViewer=mountPdf(file,pane,{element:el,button});
       }else if(types.document.test(next)){
-        disposeDocument=mountDocx(file,pane,{element:el,button});
+        disposeViewer=mountDocx(file,pane,{element:el,button});
       }else if(types.spreadsheet.test(next)){
-        disposeDocument=mountSheet(file,pane,{element:el,button});
+        disposeViewer=mountSheet(file,pane,{element:el,button});
+      }else if(types.presentation.test(next)){
+        disposeViewer=mountPresentation(file,pane,{element:el,button});
+      }else if(types.sqlite.test(next)){
+        disposeViewer=mountSqlite(file,pane,{element:el,button});
+      }else if(types.archive.test(next)){
+        pane.append(el('p','収録ファイルをファイル一覧から確認できます。','asset-status'),
+          button('このアーカイブを開く',()=>ctx.openContainer(new File([file],title.textContent))));
       }else if(types.font.test(next)){
         const face=await new FontFace('ZipStageAsset',file.size<=16*2**20?await file.arrayBuffer():new ArrayBuffer(0)).load();
         if(!same())return;
@@ -59,7 +70,14 @@ export function viewAssets(host,ctx){
         const model=await import('./model-view.mjs');if(!same())return;
         const draw=await model.viewModel(next,file,pane,(p)=>ctx.read(p),same);if(!same()){draw?.();return;}disposeModel=draw;
       }else if(types.text.test(next)){
-        const max=500000,text=await blob.slice(0,max).text();if(!same())return;
+        const max=500000;
+        const bytes=await blob.slice(0,max).arrayBuffer();if(!same())return;
+        const text=['csv','tsv','txt','md','markdown'].includes(format)?decodeAssetText(bytes):new TextDecoder().decode(bytes);
+        const offerCopy=()=>{
+          if(blob.size<=max&&['json','csv','tsv','txt','md','markdown','css','js'].includes(format)){
+            addTextCopy(pane,text,title.textContent,format,{element:el,button});
+          }
+        };
         if(blob.size>max)pane.append(el('p','先頭500 KBのみ表示しています。','quiet'));
         if(['md','markdown'].includes(format)){
           const doc=el('article',undefined,'asset-md'),tracks=[],paths=new Set(ctx.paths());
@@ -104,13 +122,14 @@ export function viewAssets(host,ctx){
             }
             const source=el('details');source.append(el('summary','元の定義を見る'),pre(text));pane.append(el('h3','APIの操作'),grid,source);
           }else if(['json','webmanifest'].includes(format)){
-            let data;try{data=JSON.parse(text);}catch{pane.append(el('p','JSONを解析できませんでした。','quiet'),pre(text));return;}
+            let data;try{data=JSON.parse(text);}catch{pane.append(el('p','JSONを解析できませんでした。','quiet'),pre(text));offerCopy();return;}
             mountJson(pane,data,text,{element:el,input,pre});
           }else pane.append(pre(text));
         }else pane.append(pre(text));
+        offerCopy();
       }else{
         const bytes=new Uint8Array(await blob.slice(0,hexPreviewLimit).arrayBuffer());if(!same())return;
-        pane.append(el('h3','バイナリの内容'));
+        pane.append(el('h3','バイナリの内容'),el('p','形式の推定 · '+(inferFormat(bytes)??'判別できません'),'asset-status'));
         const caption=bytes.length?bytes.length+' / '+blob.size+' バイトを表示':'空のファイルです。';
         pane.append(el('p',caption,'asset-status'));
         if(bytes.length){const code=pre(hexPreview(bytes));code.classList.add('asset-hex');code.tabIndex=0;code.setAttribute('aria-label','16進数とASCII');pane.append(code);}

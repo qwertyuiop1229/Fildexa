@@ -6,7 +6,7 @@ import {toolDock} from './tool-dock.mjs';
 import {cancelMotion,rectOf,playFlip,enterContent,flashIcon,cornerToggle} from './motion.mjs';
 import {previewPolicy,previewSandbox} from './policy.mjs';
 import {createLab} from './lab.mjs';
-import {acceptsAsset} from './lab-core.mjs';
+import {acceptsAsset,types} from './lab-core.mjs';
 import {createLayout} from './layout.mjs';
 import {nativeControl,probeNative,createNative,stopNative,inspectCompatibility,parseHosted} from './native.mjs';
 
@@ -20,7 +20,7 @@ const bridge=(action,value)=>{
   frame.contentWindow.postMessage({zipstage:session.token,type:'dev',value:{action,value}},'*');return true;
 };
 const sourceFiles=()=>state.original??[];
-let lab,labSettings=null,testStorage={},watchResume=null;
+let lab,labSettings=null,testStorage={},watchResume=null,archiveRead;
 let pathCache={archive:null,project:null,rows:[]};
 const stagePaths=()=>{
   const {archive,project}=state;if(!archive)return [];
@@ -122,6 +122,7 @@ function openHosted(value){
   $('hosted-note').textContent='';
   try{
     const parsed=parseHosted(value,location.origin);
+    archiveRead?.abort();archiveRead=null;
     lab.closeAsset();lab.stopWatch();$('test-indicator').hidden=true;labSettings=null;
     stopLocal();state.job++;state.gen++;dispose();state.mode='hosted';state.hosted={url:parsed.href};
     $('close-project').disabled=false;message();resetSettings();dock.close();dock.reset();
@@ -170,6 +171,7 @@ function resetGame(){
   state.game=false;$('pointer-lock').checked=false;$('pointer-lock').disabled=true;
 }
 function resetProject(){
+  archiveRead?.abort();archiveRead=null;
   lab.save();lab.stopWatch();lab.leave();pathCache={archive:null,project:null,rows:[]};labSettings=null;testStorage={};watchResume=null;$('test-indicator').hidden=true;$('project-assets').hidden=true;
   stopLocal();state.report=[];
   state.job++;state.gen++;dispose();
@@ -235,6 +237,7 @@ function selectProject(index){
   updateRoute();void prepare();
 }
 async function inspect(input,title,flavor,{watching=false,resume=null}={}){
+  archiveRead?.abort();archiveRead=null;
   lab.save();lab.leave();if(!watching)lab.stopWatch();watchResume=resume;
   labSettings=resume?.lab??null;testStorage=resume?.testStorage??{};$('test-indicator').hidden=!labSettings;$('project-assets').hidden=true;state.assetOnly=false;
   stopLocal();state.report=[];state.items=null;syncCompat(false);$('hosted-note').textContent='';
@@ -252,6 +255,17 @@ async function inspect(input,title,flavor,{watching=false,resume=null}={}){
       if(input.size>limits.zip)throw Error('ZIPは120 MBまでです。');
       const raw=await input.arrayBuffer();if(job!==state.job)return;
       archive=readZip(new Uint8Array(raw));archive.size=input.size;detected=await scan(archive);
+    }else if(flavor==='archive'){
+      const controller=new AbortController();
+      archiveRead=controller;
+      try{
+        const {readExtraArchive}=await import('./extra-archive.mjs');
+        archive=await readExtraArchive(input,controller.signal);
+        if(job!==state.job)return;
+        detected=await scan(archive);
+      }finally{
+        if(archiveRead===controller)archiveRead=null;
+      }
     }else if(flavor==='html'){
       archive=normalizeEntries([{file:input,path:'index.html'}]);
       detected={candidates:[{root:'',kind:'単体HTML',home:'index.html',pages:['index.html'],rewrites:[]}],sourceRoot:''};
@@ -294,7 +308,7 @@ async function inspect(input,title,flavor,{watching=false,resume=null}={}){
 }
 function openSingle(file){
   if(!file)return;
-  const flavor=/\.zip$/i.test(file.name)?'zip':/\.html?$/i.test(file.name)?'html':'asset';
+  const flavor=/\.zip$/i.test(file.name)?'zip':types.archive.test(file.name)?'archive':/\.html?$/i.test(file.name)?'html':'asset';
   void inspect(file,file.name,flavor);
 }
 async function prepare(){
@@ -571,6 +585,7 @@ $('erase-dialog').onclose=()=>{
 lab=createLab($,{
   read:path=>state.archive.blob(path.startsWith('/')?path.slice(1):(state.project?.root??'')+path,mime(path)),
   paths:stagePaths,
+  openContainer:openSingle,
   token:()=>state.archive,
   asset:active=>{
     $('asset-stage').hidden=!active;

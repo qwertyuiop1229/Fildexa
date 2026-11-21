@@ -1,9 +1,15 @@
 import {relativeAsset} from './lab-core.mjs';
+import {objTriangles,stlTriangles} from './mesh-formats.mjs';
 const cap=24*2**20, units={5121:1,5123:2,5125:4,5126:4};
 const read=(v,type,i)=>type===5121?v.getUint8(i):type===5123?v.getUint16(i,true):type===5125?v.getUint32(i,true):v.getFloat32(i,true);
 export async function modelTriangles(path,file,reader,same=()=>true){
   if(file.size>cap)throw Error('3Dプレビューは24 MBまでです。');
   const buf=await file.arrayBuffer(),head=new DataView(buf),chunks=[];let doc;
+  if(/\.(?:obj|stl)$/i.test(path)){
+    const faces=/\.obj$/i.test(path)?objTriangles(buf):stlTriangles(buf);
+    if(!faces.length)throw Error('表示できる面が見つかりません。');
+    return faces;
+  }
   if(/\.glb$/i.test(path)){
     if(buf.byteLength<20||head.getUint32(0,true)!==0x46546c67||head.getUint32(4,true)!==2||head.getUint32(8,true)!==buf.byteLength)throw Error('GLB 2.0として読み込めません。');
     for(let i=12;i+8<=buf.byteLength;){
@@ -55,11 +61,16 @@ export async function viewModel(path,blob,host,reader,same){
   const canvas=document.createElement('canvas'),note=document.createElement('p');
   canvas.className='asset-model';canvas.width=720;canvas.height=480;canvas.tabIndex=0;canvas.setAttribute('aria-label','3D形状。ドラッグまたは矢印キーで回転');
   note.className='quiet';note.textContent='ドラッグまたは矢印キーで回転。形状の確認用です。色・テクスチャ・ボーン・アニメーションは反映しません。';
-  host.append(canvas,note);const g=canvas.getContext('2d');if(!g)throw Error('この端末では3D形状を描画できません。');
-  let rx=.38,ry=.55,raf=0,drag=null;
+  const controls=document.createElement('div');controls.className='format-controls';
+  for(const [label,action] of [['縮小',()=>{zoom=Math.max(.6,zoom/1.2);}],['拡大',()=>{zoom=Math.min(3,zoom*1.2);}],['表示をリセット',()=>{rx=.38;ry=.55;zoom=1;}]]) {
+    const button=document.createElement('button');button.type='button';button.className='btn lab-small';button.textContent=label;
+    button.onclick=()=>{action();queue();};controls.append(button);
+  }
+  host.append(controls,canvas,note);const g=canvas.getContext('2d');if(!g)throw Error('この端末では3D形状を描画できません。');
+  let rx=.38,ry=.55,zoom=1,raf=0,drag=null;
   function draw(){
     raf=0;g.clearRect(0,0,720,480);
-    const transform=([x,y,z])=>{const a=x*Math.cos(ry)+z*Math.sin(ry),b=z*Math.cos(ry)-x*Math.sin(ry),c=y*Math.cos(rx)-b*Math.sin(rx),d=y*Math.sin(rx)+b*Math.cos(rx);return [360+a*300,240-c*300,d];};
+    const transform=([x,y,z])=>{const a=x*Math.cos(ry)+z*Math.sin(ry),b=z*Math.cos(ry)-x*Math.sin(ry),c=y*Math.cos(rx)-b*Math.sin(rx),d=y*Math.sin(rx)+b*Math.cos(rx);return [360+a*300*zoom,240-c*300*zoom,d];};
     const items=ts.map(t=>{const v=t.map(transform);return [v,(v[0][2]+v[1][2]+v[2][2])/3];}).sort((a,b)=>a[1]-b[1]);
     g.lineWidth=.45;
     for(const [v,z] of items){g.beginPath();g.moveTo(v[0][0],v[0][1]);g.lineTo(v[1][0],v[1][1]);g.lineTo(v[2][0],v[2][1]);g.closePath();g.fillStyle='hsl(163 51% '+(42+z*30)+'%)';g.fill();g.strokeStyle='#064a41';g.stroke();}
