@@ -173,3 +173,28 @@ body[data-focus=only] .resize-handle{display:none!important}
 .editor-actions .btn{min-height:28px;font-size:.79rem}
 .code-lines .code-line{display:block;overflow-wrap:anywhere;padding-left:3.5ch;position:relative}
 .code-lines .code-line::before{content:attr(data-line);position:absolute;left:0;width:3ch;text-align:right;color:var(--soft);user-select:none}
+
+.pwa-top-edge {
+  display: none;
+}
+
+@media (display-mode: standalone) {
+  @supports (-webkit-touch-callout: none) and ((background-clip: text) or (-webkit-background-clip: text)) {
+    html {
+      overscroll-behavior-y: none;
+    }
+
+    /* WebKit samples the style of the fixed top edge. Empty text keeps it from painting over the app. */
+    .pwa-top-edge {
+      display: block;
+      position: fixed;
+      inset: 0 0 auto;
+      height: 11px;
+      z-index: 2147483647;
+      pointer-events: none;
+      background-color: var(--panel);
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+  }
+}
