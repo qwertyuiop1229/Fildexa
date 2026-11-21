@@ -1,5 +1,5 @@
 {
-  "name": "ZipStage", "short_name": "ZipStage", "lang": "ja",
+  "name": "Fildexa", "short_name": "Fildexa", "lang": "ja",
   "description": "ZIP・フォルダからWebアプリをプレビュー",
   "id": "./", "start_url": "./", "scope": "./", "display": "standalone",
   "theme_color": "#087968", "background_color": "#101923",

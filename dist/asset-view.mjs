@@ -54,7 +54,7 @@ export function viewAssets(host,ctx){
         const face=await new FontFace('ZipStageAsset',file.size<=16*2**20?await file.arrayBuffer():new ArrayBuffer(0)).load();
         if(!same())return;
         font=face;document.fonts.add(font);
-        const f=input('試したい文字を入力','text'),sample=el('p','ZipStage こんにちは Aa 123','asset-font');f.value=sample.textContent;f.oninput=()=>sample.textContent=f.value;pane.append(f,sample);
+        const f=input('試したい文字を入力','text'),sample=el('p','Fildexa こんにちは Aa 123','asset-font');f.value=sample.textContent;f.oninput=()=>sample.textContent=f.value;pane.append(f,sample);
       }else if(types.model.test(next)){
         const model=await import('./model-view.mjs');if(!same())return;
         const draw=await model.viewModel(next,file,pane,(p)=>ctx.read(p),same);if(!same()){draw?.();return;}disposeModel=draw;

@@ -108,7 +108,7 @@ export function createLab($,ctx){
       const saveReport=button('JSONを保存',()=>{
         const state=ctx.state(),value=publicReport({viewport:ctx.viewport(),findings:getFindings(),steps:recipe,metrics:state.duration,network:ctx.network(),route:state.route});
         const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'})),a=el('a');
-        a.href=url;a.download='ZipStage-report.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
+        a.href=url;a.download='Fildexa-report.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
       });
       saveReport.prepend(icon('download'));share.append(actions(saveReport));
       body.replaceChildren(overview,grouped('lab-card-grid',review,perf),share);
@@ -412,7 +412,7 @@ export function createLab($,ctx){
         result.dataset.error='false';
         if(x.archive){
           const download=link('ZIPをダウンロード',x.archive);download.prepend(icon('download'));
-          result.replaceChildren(note('ZIPを保存したらZipStageのファイル選択で開いてください。'),actions(download,context));
+          result.replaceChildren(note('ZIPを保存したらFildexaのファイル選択で開いてください。'),actions(download,context));
         }else result.replaceChildren(note('GitHubの「Code」から「Download ZIP」を選べます。'),actions(context));
         enterContent(result,{duration:130,y:2});
       }catch(err){outputStatus(result,err.message,true);}

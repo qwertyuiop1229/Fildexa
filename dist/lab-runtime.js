@@ -50,12 +50,12 @@ function zipstageLabRuntime(send,{resolve,localPath,lab,routeFor}){
       });
       if(rule){
         const status=Number(rule.status);
-        if(!Number.isInteger(status)||status<200||status>599)throw new TypeError('ZipStage mock status');
+        if(!Number.isInteger(status)||status<200||status>599)throw new TypeError('Fildexa mock status');
         return new Response(method==='HEAD'||[204,205,304].includes(status)?null:String(rule.body).slice(0,30000),{status,headers:{'Content-Type':'application/json','X-ZipStage-Mock':'1'}});
       }
       if(opt.offline){
         const p=typeof raw==='string'?localPath(resolve(raw)):null;
-        if(p===null&&!/^(?:blob:|data:)/i.test(raw??''))throw new TypeError('ZipStage オフライン');
+        if(p===null&&!/^(?:blob:|data:)/i.test(raw??''))throw new TypeError('Fildexa オフライン');
       }
       return fetch.call(this,input,opts);
     };

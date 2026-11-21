@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
   <meta name="description" content="ZIPやフォルダを開いて、Webアプリと素材をプレビュー・比較・テスト。">
-  <title>ZipStage — Webプレビューとテスト</title>
+  <title>Fildexa — Webプレビューとテスト</title>
   <link rel="apple-touch-icon" href="./icons/icon-180.png">
   <link rel="manifest" href="./manifest.webmanifest">
   <meta name="theme-color" content="#087968">
@@ -57,7 +57,7 @@
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
   </defs></svg>
   <header class="topbar"><div class="top-in">
-    <a class="brand" href="./" aria-label="ZipStage ホーム"><span class="brand-mark"><img src="./icons/icon-192.png" width="36" height="36" alt=""></span><span>Zip<span class="brand-stage">Stage</span></span></a>
+    <a class="brand" href="./" aria-label="Fildexa ホーム"><span class="brand-mark"><img src="./icons/icon-192.png" width="36" height="36" alt=""></span><span>Fil<span class="brand-stage">dexa</span></span></a>
     <span class="brand-caption">WEB PROJECT STUDIO</span>
     <div class="top-right"><span class="private-tag"><svg><use href="#i-lock"/></svg>ブラウザ内で処理</span>
       <button class="icon-btn chrome-btn" id="theme" type="button" disabled data-boot-control aria-label="ダークモードに切り替え" title="テーマ切り替え"><svg><use id="theme-icon" href="#i-moon"/></svg></button>
@@ -171,13 +171,13 @@
     </section>
   </main>
   <dialog id="lab-dialog" class="lab-dialog" aria-labelledby="lab-title">
-    <div class="dialog-head"><div><span class="lab-kicker">ZIPSTAGE / WORKSPACE</span><h2 id="lab-title"><svg aria-hidden="true"><use href="#i-lab"/></svg> 検証ラボ</h2></div><form method="dialog"><button class="icon-btn chrome-btn lab-close" aria-label="検証ラボを閉じる" title="閉じる"><svg aria-hidden="true"><use href="#i-close"/></svg></button></form></div>
+    <div class="dialog-head"><div><span class="lab-kicker">FILDEXA / WORKSPACE</span><h2 id="lab-title"><svg aria-hidden="true"><use href="#i-lab"/></svg> 検証ラボ</h2></div><form method="dialog"><button class="icon-btn chrome-btn lab-close" aria-label="検証ラボを閉じる" title="閉じる"><svg aria-hidden="true"><use href="#i-close"/></svg></button></form></div>
     <div id="lab-tabs" class="lab-tabs" role="tablist" aria-label="検証ラボの機能"></div>
     <div id="lab-body" class="lab-body" role="tabpanel" tabindex="0"></div>
     <div id="lab-footer" class="lab-footer" hidden></div>
   </dialog>
   <dialog id="help-dialog" aria-labelledby="help-title">
-    <div class="dialog-head"><h2 id="help-title">ZipStageの使い方</h2><form method="dialog"><button class="btn">閉じる</button></form></div>
+    <div class="dialog-head"><h2 id="help-title">Fildexaの使い方</h2><form method="dialog"><button class="btn">閉じる</button></form></div>
     <div class="dialog-body">
       <ol class="instructions">
         <li><strong>ZIP・フォルダ・HTMLを開く</strong><p>CSSや画像も使うときは、まとめてZIPかフォルダで開いてください。Firebase Hostingの設定があれば公開用フォルダを自動で選びます。</p></li>
@@ -188,7 +188,7 @@
       <div class="help-note compatibility"><strong>外部通信オンと本番公開は別です</strong><p>HTTPS・WSSの通信を試せますが、相手のCORSやログイン設定は変わりません。本番のURLと同じにはならず、Googleログイン、PWAのインストール、IndexedDB、サーバー処理などは「動作モード・互換性」で確認方法を案内します。</p><p>ログインや保存まで確認する場合は、公開用のファイルをローカルサーバーか専用のテスト用ホスティングで開いてください。Firebaseの本番データに接続したくない場合は、エミュレーターか別のテスト用プロジェクトを使います。</p></div>
       <div class="help-note"><strong>ビルドが必要なアプリは</strong><p>TypeScript・JSX・基本的なVite構成をブラウザで簡易変換できます。独自のViteプラグインやサーバー処理があるアプリは、先にビルドして <code>dist</code> などを開いてください。FirebaseログインやPWAインストール、IndexedDBはこのプレビューでは使えません。</p></div>
     </div>
-    <div class="help-demo"><div><strong>まずは動きを試す</strong><p>ZipStage内蔵の小さなサンプルです。</p></div><button class="btn primary" id="demo" type="button"><svg><use href="#i-play"/></svg>サンプルで試す</button></div>
+    <div class="help-demo"><div><strong>まずは動きを試す</strong><p>Fildexa内蔵の小さなサンプルです。</p></div><button class="btn primary" id="demo" type="button"><svg><use href="#i-play"/></svg>サンプルで試す</button></div>
   </dialog>
   <dialog id="online-dialog" aria-labelledby="online-title">
     <div class="dialog-head"><h2 id="online-title">外部通信を許可しますか？</h2></div>
@@ -209,7 +209,7 @@
     <div class="dialog-body">
       <p class="compat-intro">何を試したいかで、実行環境を選んでください。</p>
       <section class="compat-card"><strong>隔離プレビュー</strong><p>ZIPのファイルはブラウザ内で処理します。静的な画面、操作、許可した外部通信の確認に使えます。</p><button type="button" id="isolated-mode" class="btn">隔離プレビューに戻す</button></section>
-      <section class="compat-card"><strong>ローカル互換モード <span class="compat-tag">ZipStage Local</span></strong><p>自分のPC上で、別のホスト名とURLを使って実行します。IndexedDB、Service Worker、通常のページ遷移などを試せます。信頼できる自分のアプリ専用で、アプリ自身の外部通信は制限しません。本番の設定で起動すれば、本番データを読み書きする場合があります。</p>
+      <section class="compat-card"><strong>ローカル互換モード <span class="compat-tag">Fildexa Local</span></strong><p>自分のPC上で、別のホスト名とURLを使って実行します。IndexedDB、Service Worker、通常のページ遷移などを試せます。信頼できる自分のアプリ専用で、アプリ自身の外部通信は制限しません。本番の設定で起動すれば、本番データを読み書きする場合があります。</p>
         <label class="compat-check" id="spa-option" hidden><input id="spa-fallback" type="checkbox"> 存在しないページURLを開始ページに戻す（SPA用）</label>
         <div class="compat-actions"><button type="button" class="btn primary" id="native-run">信頼するアプリを起動</button></div>
         <p id="native-note" class="quiet" role="status"></p>

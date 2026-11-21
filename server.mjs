@@ -111,11 +111,11 @@ export async function launch(port=0,{authPort=null}={}){
     clearTimeout(s.timer);sessions.delete(id);s.server.close();s.server.closeAllConnections?.();return true;
   }
   async function spawn(project){
-    if(closed)throw Error('ZipStage Local は終了しました。');
+    if(closed)throw Error('Fildexa Local は終了しました。');
     const id=secret(), host=authPort?'localhost':'zs-'+randomBytes(8).toString('hex')+'.localhost';let p=0;
     const server=createServer((req,res)=>{
       const headers={'Content-Security-Policy':"frame-ancestors 'self' "+origin(),'Cross-Origin-Opener-Policy':'same-origin-allow-popups'};
-      if(req.headers.host!==host+':'+p)return fail(res,403,'ZipStage が発行したプレビューURLを使ってください。');
+      if(req.headers.host!==host+':'+p)return fail(res,403,'Fildexa が発行したプレビューURLを使ってください。');
       if(!onlyRead(req))return fail(res,405,'このサーバーは静的ファイルを提供します。');
       try{
         const pathname=urlPath(req), isDocument=req.headers['sec-fetch-dest']==='document'||req.headers['sec-fetch-dest']==='iframe'||/\btext\/html\b/.test(req.headers.accept??'');
@@ -130,7 +130,7 @@ export async function launch(port=0,{authPort=null}={}){
       await new Promise(ok=>server.close(ok));p=0;
     }
     if(!p)throw Error('新しいプレビュー用ポートを確保できませんでした。');
-    if(closed){server.close();throw Error('ZipStage Local は終了しました。');}
+    if(closed){server.close();throw Error('Fildexa Local は終了しました。');}
     if(!authPort)oldPorts.add(p);
     sessions.set(id,{server,size:project.size,timer:setTimeout(()=>stop(id),TTL).unref()});
     const entry=project.entry==='index.html'?'':'/'+project.entry.split('/').map(encodeURIComponent).join('/');
@@ -184,6 +184,6 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   if(!Number.isInteger(port)||port<0||port>65535||args.some(a=>a!=='--auth-localhost'&&!/^\d+$/.test(a)))throw new Error('使い方: node server.mjs [ポート] [--auth-localhost]');
   const server=await launch(port,{authPort:stable?4176:null});
   if(stable)console.log('認証テスト用: localhost:4176 はデータを共有します。信頼する1つのアプリ専用にしてください。');
-  console.log('ZipStage Local を起動しました。\nブラウザで '+server.url+' を開いてください。\n終了は Ctrl+C');
+  console.log('Fildexa Local を起動しました。\nブラウザで '+server.url+' を開いてください。\n終了は Ctrl+C');
   for(const sig of ['SIGINT','SIGTERM'])process.on(sig,()=>{server.close();process.exit(0);});
 }

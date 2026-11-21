@@ -122,7 +122,7 @@ export function classify({files=[],report=[],issues=[],status='',compileErrors=[
   if(status==='error')add('boot','起動に失敗','コンソールで最初のエラーを確認。ビルド済みなら、公開フォルダを選び直してください。');
   if(!paths.length&&status!=='error')add('empty','まだ解析するファイルがありません','ファイルかフォルダを開くと診断が出ます。');
   if(paths.length&&!paths.some(x=>/\.html?$/i.test(x)))add('no-entry','HTMLの入口がありません','資料だけならファイルを選択。アプリならビルド済みフォルダか、開発サーバーのURLを開いてください。');
-  for(const [id,title,detail] of [['missing','見つからないファイル','パスの大文字・小文字、ビルド時の base、公開フォルダを確認。'],['csp','ブラウザが通信を制限','通信タブで対象を確認。信頼できるアプリなら外部通信をオンにできます。'],['request','ネットワークに失敗','サーバーが起動しているか確認。CORSはZipStage側では解除できません。'],['js','JavaScriptエラー','コンソールの最初のエラーから確認すると原因を絞れます。']]){
+  for(const [id,title,detail] of [['missing','見つからないファイル','パスの大文字・小文字、ビルド時の base、公開フォルダを確認。'],['csp','ブラウザが通信を制限','通信タブで対象を確認。信頼できるアプリなら外部通信をオンにできます。'],['request','ネットワークに失敗','サーバーが起動しているか確認。CORSはFildexa側では解除できません。'],['js','JavaScriptエラー','コンソールの最初のエラーから確認すると原因を絞れます。']]){
     const rows=get(id);
     if(rows.length)add(id,title,detail,rows.length);
   }

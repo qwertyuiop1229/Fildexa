@@ -13,13 +13,13 @@ export function parseNative(value,authLocal=false){
 }
 let sessionToken;
 async function token(signal){
-  if(!nativeControl(location))throw Error('ZipStage Local を起動してください。');
+  if(!nativeControl(location))throw Error('Fildexa Local を起動してください。');
   if(sessionToken)return sessionToken;
   const r=await fetch('/__zipstage/session',{cache:'no-store',signal});
-  if(!r.ok)throw Error('ZipStage Local に接続できません。');
-  if(!(r.headers.get('content-type')??'').startsWith('application/json'))throw Error('ZipStage Local を起動してください。');
+  if(!r.ok)throw Error('Fildexa Local に接続できません。');
+  if(!(r.headers.get('content-type')??'').startsWith('application/json'))throw Error('Fildexa Local を起動してください。');
   const d=await r.json();
-  if(!/^[a-f\d]{48}$/.test(d.token))throw Error('ZipStage Local を起動してください。');
+  if(!/^[a-f\d]{48}$/.test(d.token))throw Error('Fildexa Local を起動してください。');
   return sessionToken={key:d.token,authLocal:d.authLocal===true};
 }
 export async function probeNative(signal){
@@ -62,6 +62,6 @@ export function parseHosted(raw,studioOrigin){
   let url;
   try{url=new URL(raw.trim());}catch{throw Error('https:// から始まるテスト用URLを入力してください。');}
   if(url.protocol!=='https:'||url.username||url.password||url.href.length>3500)throw Error('認証情報を含まない HTTPS のURLを入力してください。');
-  if(url.origin===studioOrigin)throw Error('ZipStage本体とは別オリジンのURLを使ってください。');
+  if(url.origin===studioOrigin)throw Error('Fildexa本体とは別オリジンのURLを使ってください。');
   return url;
 }
