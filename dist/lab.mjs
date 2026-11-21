@@ -1,4 +1,4 @@
-import {acceptsAsset,assetGroup,classify,githubLinks,publicReport,testShareURL,ext,comparisonRoute,compareFiles,mockRuleProblem} from './lab-core.mjs';
+import {assetGroup,classify,githubLinks,publicReport,testShareURL,ext,comparisonRoute,compareFiles,mockRuleProblem} from './lab-core.mjs';
 import {createPicker} from './picker.mjs';
 import {viewAssets} from './asset-view.mjs';
 import {enterContent,cancelMotion} from './motion.mjs';
@@ -70,7 +70,7 @@ export function createLab($,ctx){
   function begin(){issues=[];audit=null;frames=null;auditPending=framesPending=false;pendingCheck=null;diagnosisKey='';refresh();}
   const view=viewAssets(host,{paths:ctx.paths,read:ctx.read,token:ctx.token,mock(row){addRule(row);},back:()=>closeAsset(true),browse:()=>selection('files')});
   async function openAsset(path){
-    if(!acceptsAsset(path))return;
+    if(!ctx.paths().includes(path))return;
     if(dialog.open)dialog.close();ctx.asset(true);await view.open(path);
   }
   function closeAsset(user=false){const active=!!view.current();view.close();ctx.asset(false);if(user&&active){const target=$('open-lab');target?.focus({preventScroll:true});}}
@@ -144,11 +144,11 @@ export function createLab($,ctx){
     ]:[note(ready?'ゲーム操作中の引っかかりの目安に。':'隔離プレビューを開くと計測できます。')]));
   }
   function renderFiles(){
-    const all=ctx.paths().filter(acceptsAsset).map(p=>({p,group:assetGroup(p),format:ext(p).toUpperCase()}));
+    const all=ctx.paths().map(p=>({p,group:assetGroup(p),format:ext(p).toUpperCase()||'FILE'}));
     const section=block('ファイルブラウザ','資料・画像・ソースを実行せずに確認します。');
     if(!all.length){section.append(empty('表示できるファイルはまだありません。','folder'),actions(button('ファイルを開く',()=>{dialog.close();ctx.file();},true)));body.append(section);return;}
     const f=input('search','ファイル名を検索');f.placeholder='ファイル名やフォルダを検索';f.value=fileQuery;
-    const rows=el('div',undefined,'lab-file-list'),count=live(),chips=el('div',undefined,'lab-filters'),groups={all:'すべて',docs:'資料',media:'素材',data:'データ',code:'コード'};
+    const rows=el('div',undefined,'lab-file-list'),count=live(),chips=el('div',undefined,'lab-filters'),groups={all:'すべて',docs:'資料',media:'素材',data:'データ',code:'コード',other:'その他'};
     const more=button('さらに表示',()=>{const index=fileLimit;fileLimit+=75;list();rows.children[index]?.focus({preventScroll:true});});
     function list(){
       const q=fileQuery.trim().toLowerCase(),found=all.filter(x=>(fileKind==='all'||fileKind===x.group)&&x.p.toLowerCase().includes(q));

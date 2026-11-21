@@ -1,4 +1,8 @@
 import {enterContent} from './motion.mjs';
+import {mountPdf} from './asset-pdf.mjs';
+import {hexPreview,hexPreviewLimit} from './asset-hex.mjs';
+import {mountJson} from './asset-json.mjs';
+import {mountImage} from './asset-image.mjs';
 import {prettySize} from './workspace.mjs';
 import {assetBlob,relativeAsset,parseDelimited,parseApi,types,ext} from './lab-core.mjs';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
@@ -11,13 +15,13 @@ function table(headers,rows,sort){
   const body=el('tbody');for(const row of rows){const r=el('tr');for(const value of row)r.append(el('td',String(value??'')));body.append(r);}t.append(body);return t;
 }
 export function viewAssets(host,ctx){
-  let seq=0, urls=[], font=null, disposeModel=null,path='',archiveToken=null;
+  let seq=0, urls=[], font=null, disposeModel=null,disposePdf=null,path='',archiveToken=null;
   const url=blob=>{const u=URL.createObjectURL(blob);urls.push(u);return u;};
-  function close(){seq++;for(const u of urls)URL.revokeObjectURL(u);urls=[];if(font)document.fonts.delete(font);font=null;disposeModel?.();disposeModel=null;host.replaceChildren();path='';archiveToken=null;}
+  function close(){seq++;for(const u of urls)URL.revokeObjectURL(u);urls=[];if(font)document.fonts.delete(font);font=null;disposeModel?.();disposeModel=null;disposePdf?.();disposePdf=null;host.replaceChildren();path='';archiveToken=null;}
   async function open(next){
     close();path=next;archiveToken=ctx.token();const turn=seq, same=()=>turn===seq;
     host.hidden=false;
-    const toolbar=el('div',undefined,'asset-bar'),meta=el('div',undefined,'asset-heading'),mark=el('span',ext(next).toUpperCase(),'lab-badge accent'),title=el('strong',next.split('/').at(-1));title.title=next;
+    const toolbar=el('div',undefined,'asset-bar'),meta=el('div',undefined,'asset-heading'),mark=el('span',(ext(next).slice(0,12).toUpperCase()||'FILE'),'lab-badge accent'),title=el('strong',next.split('/').at(-1));title.title=next;
     const details=el('span','読み込み中…','quiet');meta.append(title,details);
     const tools=el('div',undefined,'lab-actions asset-actions');
     const browse=button('ファイル一覧',ctx.browse),back=button('閉じる',ctx.back);
@@ -29,27 +33,17 @@ export function viewAssets(host,ctx){
     try{
       const blob=await ctx.read(next);if(!same())return;
       const format=ext(next),file=assetBlob(next,blob);
-      details.textContent=prettySize(blob.size);
-      const link=el('a','元ファイル','btn lab-small');link.download=next.split('/').at(-1);link.href=url(file);
+      details.textContent=prettySize(blob.size)+' · '+(ext(next).slice(0,28).toUpperCase()||'拡張子なし');
+      const link=el('a','ダウンロード','btn lab-small');link.download=next.split('/').at(-1);link.href=url(file);
       tools.insertBefore(link,back);
       pane.replaceChildren();enterContent(pane,{duration:150,y:2});
       if(types.image.test(next)){
-        const tools=el('div',undefined,'lab-actions asset-segment');tools.setAttribute('role','group');tools.setAttribute('aria-label','画像の背景');const well=el('div',undefined,'asset-image checker'),img=el('img');img.src=link.href;img.alt=title.textContent;
-        img.onerror=()=>well.replaceChildren(el('p','このブラウザではこの画像を表示できません。','quiet'));
-        well.append(img);for(const [name,cls] of [['透明','checker'],['明','light'],['暗','dark']]){
-          const b=button(name,()=>{well.className='asset-image '+cls;for(const item of tools.querySelectorAll('button'))item.setAttribute('aria-pressed',String(item===b));});
-          b.setAttribute('aria-pressed',String(cls==='checker'));tools.append(b);
-        }
-        const sizes=el('div',undefined,'asset-sizes');for(const size of [16,32,64]){
-          const icon=el('img');icon.src=link.href;icon.alt='';icon.width=icon.height=size;const cell=el('div');cell.append(icon,el('span',size+' px','quiet'));sizes.append(cell);
-        }
-        pane.append(tools,well,sizes);
+        mountImage(pane,link.href,title.textContent,{element:el,button});
       }else if(types.audio.test(next)||types.video.test(next)){
         const node=el(types.audio.test(next)?'audio':'video');node.controls=true;node.playsInline=true;node.preload='metadata';node.src=link.href;
         node.onerror=()=>pane.append(el('p','この端末ではこの音声・動画を再生できません。','quiet'));pane.append(node);
       }else if(types.pdf.test(next)){
-        const frame=el('iframe');frame.title='PDF '+next;frame.setAttribute('sandbox','');frame.src=link.href;frame.className='asset-pdf';
-        pane.append(el('p','表示されない場合は「元ファイル」から端末のPDFビューアーで開けます。','quiet'),frame);
+        disposePdf=mountPdf(file,pane,{element:el,button});
       }else if(types.font.test(next)){
         const face=await new FontFace('ZipStageAsset',file.size<=16*2**20?await file.arrayBuffer():new ArrayBuffer(0)).load();
         if(!same())return;
@@ -105,27 +99,16 @@ export function viewAssets(host,ctx){
             const source=el('details');source.append(el('summary','元の定義を見る'),pre(text));pane.append(el('h3','APIの操作'),grid,source);
           }else if(['json','webmanifest'].includes(format)){
             let data;try{data=JSON.parse(text);}catch{pane.append(el('p','JSONを解析できませんでした。','quiet'),pre(text));return;}
-            const f=input('キー・値を検索'),tree=el('div',undefined,'asset-tree');let count=0;
-            function treeFor(key,value,root=false,depth=0){
-              if(++count>700||depth>24)return el('p','表示を省略しました。','quiet');
-              if(value===null||typeof value!=='object')return el('p',(key?key+'  ':'')+JSON.stringify(value),'lab-mono');
-              const entries=Object.entries(value),d=el('details');d.open=root;d.append(el('summary',(key?key+'  ':'')+(Array.isArray(value)?'配列':'オブジェクト')+' · '+entries.length));
-              const children=el('div');d.append(children);
-              let drawn=false;function draw(){if(drawn||!d.open)return;drawn=true;for(const [k,v] of entries.slice(0,120))children.append(treeFor(k,v,false,depth+1));if(entries.length>120)children.append(el('p','最初の120項目を表示','quiet'));}
-              d.addEventListener('toggle',draw);draw();return d;
-            }
-            function render(){
-              count=0;tree.replaceChildren();
-              const q=f.value.toLowerCase();
-              if(!q){tree.append(treeFor('',data,true));return;}
-              const found=[];let visited=0;
-              function walk(value,paths=[]){if(found.length>=120||paths.length>24||++visited>40000)return;if(value&&typeof value==='object'){for(const [k,v] of Object.entries(value)){if(found.length>=120||visited>40000)break;walk(v,[...paths,k]);}}else{const p=paths.join('.'),v=JSON.stringify(value);if(p.toLowerCase().includes(q)||v.toLowerCase().includes(q))found.push(el('p',p+'  '+v,'lab-mono'));}}
-              walk(data);tree.append(...(found.length?found:[el('p','一致する値はありません。','quiet')]));
-            }
-            f.oninput=render;pane.append(f,tree);render();
+            mountJson(pane,data,text,{element:el,input,pre});
           }else pane.append(pre(text));
         }else pane.append(pre(text));
-      }else pane.append(el('p','この形式はブラウザで表示できません。「元ファイル」を使ってください。','quiet'));
+      }else{
+        const bytes=new Uint8Array(await blob.slice(0,hexPreviewLimit).arrayBuffer());if(!same())return;
+        pane.append(el('h3','バイナリの内容'));
+        const caption=bytes.length?bytes.length+' / '+blob.size+' バイトを表示':'空のファイルです。';
+        pane.append(el('p',caption,'asset-status'));
+        if(bytes.length){const code=pre(hexPreview(bytes));code.classList.add('asset-hex');code.tabIndex=0;code.setAttribute('aria-label','16進数とASCII');pane.append(code);}
+      }
     }catch(e){if(same()){details.textContent='読み込みエラー';const error=el('p',String(e?.message??e),'lab-error');error.setAttribute('role','status');pane.replaceChildren(error);}}
   }
   return {open,close,current:()=>path,isCurrent:()=>path&&archiveToken===ctx.token()};

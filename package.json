@@ -1,0 +1,9 @@
+{
+  "name": "fildexa",
+  "private": true,
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test",
+    "deploy": "node scripts/deploy.mjs"
+  }
+}

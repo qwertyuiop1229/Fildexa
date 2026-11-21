@@ -8,8 +8,11 @@ export const types={
   pdf:/\.pdf$/i
 };
 export const acceptsAsset=p=>Object.values(types).some(exp=>exp.test(p));
-export const supported='.zip,.html,.htm,.md,.markdown,.txt,.log,.json,.webmanifest,.yaml,.yml,.csv,.tsv,.svg,.png,.jpg,.jpeg,.gif,.webp,.avif,.bmp,.ico,.pdf,.mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.mp4,.webm,.mov,.m4v,.ogv,.woff,.woff2,.ttf,.otf,.glb,.gltf,.js,.jsx,.mjs,.ts,.tsx,.mts,.css,.vue,.svelte,.astro,.xml,.toml,.ini,.py,.php,.sql,.cjs,.cts';
-export const ext=p=>p.split('.').pop().toLowerCase();
+export const ext = (path) => {
+  const name = path.split('/').at(-1);
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+};
 const typeOverrides={pdf:'application/pdf',glb:'model/gltf-binary',gltf:'model/gltf+json',avif:'image/avif',bmp:'image/bmp',ico:'image/x-icon',wav:'audio/wav',mp3:'audio/mpeg',ogg:'audio/ogg',oga:'audio/ogg',m4a:'audio/mp4',aac:'audio/aac',flac:'audio/flac',mp4:'video/mp4',mov:'video/quicktime',m4v:'video/mp4',webm:'video/webm',ogv:'video/ogg'};
 export const assetBlob=(path,blob)=>typeOverrides[ext(path)]?blob.slice(0,blob.size,typeOverrides[ext(path)]):blob;
 export function relativeAsset(base,raw){
@@ -138,7 +141,7 @@ export function assetGroup(path){
   if(types.image.test(path)||types.font.test(path)||types.model.test(path)||types.audio.test(path)||types.video.test(path))return 'media';
   if(/\.(?:json|csv|tsv|ya?ml|webmanifest)$/i.test(path))return 'data';
   if(/\.(?:md|markdown|txt|log|pdf)$/i.test(path))return 'docs';
-  return 'code';
+  return acceptsAsset(path) ? 'code' : 'other';
 }
 export function mockRuleProblem(rules){
   const seen=new Set();

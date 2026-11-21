@@ -1,4 +1,4 @@
-import {readZip,limits} from './zip.mjs';
+import {readZip,limits,mime} from './zip.mjs';
 import {scan,expand} from './project.mjs';
 import {normalizeEntries,listDrop,projectKey,SavedProjects,safeStorage,compile,prettySize,fitViewport,clamp,describePage,appSignature} from './workspace.mjs';
 import {createPicker} from './picker.mjs';
@@ -6,7 +6,7 @@ import {toolDock} from './tool-dock.mjs';
 import {cancelMotion,rectOf,playFlip,enterContent,flashIcon,cornerToggle} from './motion.mjs';
 import {previewPolicy,previewSandbox} from './policy.mjs';
 import {createLab} from './lab.mjs';
-import {acceptsAsset,supported} from './lab-core.mjs';
+import {acceptsAsset} from './lab-core.mjs';
 import {createLayout} from './layout.mjs';
 import {nativeControl,probeNative,createNative,stopNative,inspectCompatibility,parseHosted} from './native.mjs';
 
@@ -264,8 +264,8 @@ async function inspect(input,title,flavor,{watching=false,resume=null}={}){
     if(job!==state.job)return;
     state.size=archive.size;state.archive=archive;
     if(!detected.candidates.length){
-      const files=stagePaths(),first=files.find(p=>/^(?:.*\/)?readme\.(?:md|markdown)$/i.test(p))??files.find(acceptsAsset);
-      if(!first)throw Error('プレビューできるファイルがありません。ビルド済みフォルダか対応する素材を選んでください。');
+      const files=stagePaths(),first=files.find(p=>/^(?:.*\/)?readme\.(?:md|markdown)$/i.test(p))??files.find(acceptsAsset)??files[0];
+      if(!first)throw Error('開けるファイルが見つかりませんでした。');
       state.assetOnly=true;state.projects=[];state.build=!!detected.build;$('project-info').hidden=false;$('project-assets').hidden=false;
       $('project-name').textContent=title;$('project-detail').textContent=prettySize(state.size)+' · '+files.length+' ファイル';
       loading(false);phase('ファイル閲覧','ready');$('path-label').textContent='ファイル閲覧';
@@ -294,9 +294,8 @@ async function inspect(input,title,flavor,{watching=false,resume=null}={}){
 }
 function openSingle(file){
   if(!file)return;
-  const flavor=/\.zip$/i.test(file.name)?'zip':/\.html?$/i.test(file.name)?'html':acceptsAsset(file.name)?'asset':'';
-  if(flavor)void inspect(file,file.name,flavor);
-  else failure(Error('ZIP、フォルダ、HTML、画像やCSVなどの対応ファイルを選んでください。'));
+  const flavor=/\.zip$/i.test(file.name)?'zip':/\.html?$/i.test(file.name)?'html':'asset';
+  void inspect(file,file.name,flavor);
 }
 async function prepare(){
   const project=state.project,gen=++state.gen;
@@ -406,7 +405,7 @@ window.addEventListener('drop',async e=>{
     const data=e.dataTransfer;
     const entries=await listDrop(data);if(job!==state.job||!entries.length)return;
     const file=entries[0].file;
-    if(entries.length===1&&entries[0].path===file.name&&(/\.zip$/i.test(file.name)||acceptsAsset(file.name)))openSingle(file);
+    if(entries.length===1&&entries[0].path===file.name)openSingle(file);
     else void inspect(entries,entries[0].path.includes('/')?entries[0].path.split('/')[0]:'選択したファイル','folder');
   }catch(e){if(job===state.job)failure(e);}
 });
@@ -570,7 +569,7 @@ $('erase-dialog').onclose=()=>{
   erase=null;refreshSaved();dock.storage();
 };
 lab=createLab($,{
-  read:path=>state.archive.blob(path.startsWith('/')?path.slice(1):(state.project?.root??'')+path),
+  read:path=>state.archive.blob(path.startsWith('/')?path.slice(1):(state.project?.root??'')+path,mime(path)),
   paths:stagePaths,
   token:()=>state.archive,
   asset:active=>{
@@ -600,7 +599,6 @@ lab=createLab($,{
     await inspect(rows,name,'folder',{watching:true,resume});
   }
 });
-$('file').accept=supported;
 $('open-lab').onclick=()=>lab.selection();
 $('project-assets').onclick=()=>lab.selection('files');
 $('test-indicator').onclick=()=>lab.selection('test');

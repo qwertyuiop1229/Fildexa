@@ -1,0 +1,2 @@
+dist/vendor/pdfjs/** -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+dist/vendor/pdfjs/README.md text whitespace
